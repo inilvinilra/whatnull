@@ -4,6 +4,7 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 ### Fixed
+- The dev server bound only to the IPv6 loopback. `vite.config.ts` asked for `localhost`, which resolves to `::1` first on many systems, so nothing listened on `127.0.0.1` while `devUrl` pointed at the name `localhost`. Whether the shell webview loaded then depended on how WebKit resolved that name, and when it chose IPv4 the app opened on a raw "Could not connect to localhost" page. Both sides now use `127.0.0.1` explicitly.
 - The window no longer shows a strip of the local shell above the WhatsApp surface. Both webviews now fill the window and visibility is switched explicitly, because GTK gives sibling webviews no usable stacking order.
 - Startup failures print the reason to stderr instead of exiting silently with status 1.
 - IPv6 addresses were never rejected by the navigation policy. `Url::host_str` returns IPv6 literals wrapped in brackets, so they never parsed as an IP and the entire IPv6 private-address branch was dead code. Host inspection now uses the parsed `url::Host`, and IPv4-mapped IPv6 addresses such as `::ffff:127.0.0.1` are covered too.
