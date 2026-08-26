@@ -15,13 +15,17 @@ const SIDEBAR_WIDTH: f64 = 60.0;
 const WHATSAPP_URL: &str = "https://web.whatsapp.com";
 
 pub struct WebViewManager {
+    shell_webview: Arc<Mutex<Option<Webview>>>,
     remote_webview: Arc<Mutex<Option<Webview>>>,
+    shell_overlay: Arc<Mutex<bool>>,
 }
 
 impl WebViewManager {
     pub fn new() -> Self {
         Self {
+            shell_webview: Arc::new(Mutex::new(None)),
             remote_webview: Arc::new(Mutex::new(None)),
+            shell_overlay: Arc::new(Mutex::new(true)),
         }
     }
 
@@ -51,11 +55,16 @@ impl WebViewManager {
         let shell = WebviewBuilder::new(SHELL_WEBVIEW_LABEL, WebviewUrl::App("index.html".into()))
             .transparent(true);
 
-        window
+        let shell = window
             .add_child(shell, LogicalPosition::new(0.0, 0.0), size)
             .map_err(|e| AppError::WebView(format!("Failed to build shell webview: {}", e)))?;
 
+        if let Ok(mut guard) = self.shell_webview.lock() {
+            *guard = Some(shell);
+        }
+
         self.create_whatsapp_child(&window, data_dir)?;
+        self.set_shell_bounds(size, true)?;
         self.set_whatsapp_bounds(&window, size)?;
 
         Ok(window)
@@ -118,10 +127,27 @@ impl WebViewManager {
         })
     }
 
+    pub fn set_shell_overlay_mode(&self, window: &Window, overlay: bool) -> Result<(), AppError> {
+        if let Ok(mut guard) = self.shell_overlay.lock() {
+            *guard = overlay;
+        }
+
+        let size = window
+            .inner_size()
+            .map_err(|e| AppError::Window(format!("Failed to read window size: {}", e)))?;
+        self.set_shell_bounds(size, overlay)
+    }
+
     pub fn sync_whatsapp_bounds(&self, window: &Window) -> Result<(), AppError> {
         let size = window
             .inner_size()
             .map_err(|e| AppError::Window(format!("Failed to read window size: {}", e)))?;
+        let overlay = self
+            .shell_overlay
+            .lock()
+            .map(|guard| *guard)
+            .unwrap_or(true);
+        self.set_shell_bounds(size, overlay)?;
         self.set_whatsapp_bounds(window, size)
     }
 
@@ -183,6 +209,30 @@ impl WebViewManager {
             .set_position(LogicalPosition::new(SIDEBAR_WIDTH, 0.0))
             .and_then(|_| webview.set_size(Size::Logical(LogicalSize::new(width, height))))
             .map_err(|e| AppError::WebView(format!("Failed to resize WhatsApp webview: {}", e)))
+    }
+
+    fn set_shell_bounds(&self, size: PhysicalSize<u32>, overlay: bool) -> Result<(), AppError> {
+        let webview = self.shell_webview()?;
+        let width = if overlay {
+            size.width as f64
+        } else {
+            SIDEBAR_WIDTH
+        };
+
+        webview
+            .set_position(LogicalPosition::new(0.0, 0.0))
+            .and_then(|_| {
+                webview.set_size(Size::Logical(LogicalSize::new(width, size.height as f64)))
+            })
+            .map_err(|e| AppError::WebView(format!("Failed to resize shell webview: {}", e)))
+    }
+
+    fn shell_webview(&self) -> Result<Webview, AppError> {
+        self.shell_webview
+            .lock()
+            .ok()
+            .and_then(|guard| guard.clone())
+            .ok_or_else(|| AppError::WebView("Shell webview instance not found".to_string()))
     }
 
     fn whatsapp_webview(&self) -> Result<Webview, AppError> {

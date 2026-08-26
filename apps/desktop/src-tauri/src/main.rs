@@ -80,6 +80,7 @@ fn main() {
             crate::ipc::reload_whatsapp,
             crate::ipc::hard_reload_whatsapp,
             crate::ipc::set_whatsapp_visible,
+            crate::ipc::set_shell_overlay_mode,
             crate::ipc::reset_session,
             crate::ipc::list_profiles,
             crate::ipc::create_profile,

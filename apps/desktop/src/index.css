@@ -44,7 +44,7 @@
 }
 
 body {
-  background-color: var(--bg-primary);
+  background-color: transparent;
   color: var(--text-primary);
   overflow: hidden;
   height: 100vh;
@@ -79,6 +79,10 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   display: flex;
   height: 100%;
   width: 100%;
+  background: transparent;
+}
+
+.app-container.overlay-mode {
   background: radial-gradient(circle at top right, rgba(13, 148, 136, 0.05), transparent 40%),
               radial-gradient(circle at bottom left, rgba(15, 118, 110, 0.03), transparent 30%);
 }
@@ -212,6 +216,7 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 
 .onboarding-screen {
   display: flex;
+  flex: 1;
   flex-direction: column;
   align-items: center;
   justify-content: center;

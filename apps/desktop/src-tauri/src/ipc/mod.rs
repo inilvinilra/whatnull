@@ -1,6 +1,6 @@
 use crate::app::AppState;
 use crate::error::AppErrorWrapper;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 use whatnull_types::{AccountProfile, AppError};
 
 #[tauri::command]
@@ -69,6 +69,22 @@ pub fn set_whatsapp_visible(
     state
         .webview_manager
         .set_whatsapp_visible(visible)
+        .map_err(AppErrorWrapper::from)
+}
+
+#[tauri::command]
+pub fn set_shell_overlay_mode(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+    overlay: bool,
+) -> Result<(), AppErrorWrapper> {
+    let window = app_handle.get_window("main").ok_or_else(|| {
+        AppErrorWrapper::from(AppError::Window("Main window not found".to_string()))
+    })?;
+
+    state
+        .webview_manager
+        .set_shell_overlay_mode(&window, overlay)
         .map_err(AppErrorWrapper::from)
 }
 

@@ -10,7 +10,7 @@ import { useAppStore } from './stores/appStore'
 import { useConfigStore } from './stores/configStore'
 
 export function App() {
-  const { onboardingCompleted, activeTab } = useAppStore()
+  const { onboardingCompleted } = useAppStore()
   const { fetchConfig } = useConfigStore()
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isAccountSwitcherOpen, setIsAccountSwitcherOpen] = useState(false)
@@ -43,14 +43,25 @@ export function App() {
   }, [])
 
   useEffect(() => {
-    const visible =
-      onboardingCompleted &&
-      !isSettingsOpen &&
-      !isAccountSwitcherOpen &&
-      !isManualLocked &&
-      !isBlurredByFocus
+    const overlay =
+      !onboardingCompleted ||
+      isSettingsOpen ||
+      isAccountSwitcherOpen ||
+      isManualLocked ||
+      isBlurredByFocus
 
-    invoke('set_whatsapp_visible', { visible }).catch(() => {})
+    const syncWebviews = async () => {
+      if (overlay) {
+        await invoke('set_whatsapp_visible', { visible: false }).catch(() => {})
+        await invoke('set_shell_overlay_mode', { overlay: true }).catch(() => {})
+        return
+      }
+
+      await invoke('set_shell_overlay_mode', { overlay: false }).catch(() => {})
+      await invoke('set_whatsapp_visible', { visible: true }).catch(() => {})
+    }
+
+    syncWebviews()
   }, [
     onboardingCompleted,
     isSettingsOpen,
@@ -60,7 +71,7 @@ export function App() {
   ])
 
   return (
-    <div className="app-container">
+    <div className={`app-container ${!onboardingCompleted ? 'overlay-mode' : ''}`}>
       <PrivacyOverlay
         isLockedManual={isManualLocked}
         isBlurredByFocus={isBlurredByFocus}
@@ -73,29 +84,7 @@ export function App() {
         onPrivacyLock={() => setIsManualLocked(true)}
       />
 
-      <div className="app-main-content">
-        {!onboardingCompleted ? (
-          <Onboarding />
-        ) : (
-          <div className="webview-container">
-            {activeTab === 'chats' && (
-              <div
-                id="webview-placeholder"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--text-secondary)',
-                }}
-              >
-                Connecting to WhatsApp Web...
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      {!onboardingCompleted && <Onboarding />}
 
       {isSettingsOpen && <SettingsModal onClose={() => setIsSettingsOpen(false)} />}
       {isAccountSwitcherOpen && (
