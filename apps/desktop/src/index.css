@@ -79,59 +79,12 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   display: flex;
   height: 100%;
   width: 100%;
-  background: transparent;
+  background: var(--bg-primary);
 }
 
 .app-container.overlay-mode {
   background: radial-gradient(circle at top right, rgba(13, 148, 136, 0.05), transparent 40%),
               radial-gradient(circle at bottom left, rgba(15, 118, 110, 0.03), transparent 30%);
-}
-
-.app-sidebar {
-  width: 60px;
-  background: var(--bg-secondary);
-  border-right: 1px solid var(--border-color);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 16px 0;
-  gap: 16px;
-  z-index: 100;
-  height: 100%;
-}
-
-.sidebar-logo-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, var(--accent-color), var(--accent-light));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-}
-
-.sidebar-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  align-items: center;
-}
-
-.sidebar-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary);
-  transition: all 0.2s ease;
-}
-
-.sidebar-btn:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
 }
 
 .app-main-content {

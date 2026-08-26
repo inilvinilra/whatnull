@@ -2,8 +2,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use tauri::{
-    webview::PageLoadEvent, AppHandle, LogicalPosition, LogicalSize, Manager, PhysicalPosition,
-    PhysicalSize, Rect, Url, Webview, WebviewBuilder, WebviewUrl, Window, WindowBuilder,
+    webview::PageLoadEvent, AppHandle, LogicalPosition, LogicalSize, Manager, Rect, Url, Webview,
+    WebviewBuilder, WebviewUrl, Window, WindowBuilder,
 };
 use whatnull_security::{NavigationDecision, NavigationPolicy};
 use whatnull_types::AppError;
@@ -11,13 +11,12 @@ use whatnull_types::AppError;
 const WINDOW_LABEL: &str = "main";
 const SHELL_WEBVIEW_LABEL: &str = "shell";
 const WHATSAPP_WEBVIEW_LABEL: &str = "whatsapp";
-const SIDEBAR_WIDTH: f64 = 60.0;
 const WHATSAPP_URL: &str = "https://web.whatsapp.com";
 
 pub struct WebViewManager {
     shell_webview: Arc<Mutex<Option<Webview>>>,
     remote_webview: Arc<Mutex<Option<Webview>>>,
-    shell_overlay: Arc<Mutex<bool>>,
+    overlay_visible: Arc<Mutex<bool>>,
 }
 
 impl WebViewManager {
@@ -25,7 +24,7 @@ impl WebViewManager {
         Self {
             shell_webview: Arc::new(Mutex::new(None)),
             remote_webview: Arc::new(Mutex::new(None)),
-            shell_overlay: Arc::new(Mutex::new(true)),
+            overlay_visible: Arc::new(Mutex::new(true)),
         }
     }
 
@@ -48,19 +47,11 @@ impl WebViewManager {
             .build()
             .map_err(|e| AppError::Window(format!("Failed to build app window: {}", e)))?;
 
-        let size = window
-            .inner_size()
-            .map_err(|e| AppError::Window(format!("Failed to read window size: {}", e)))?;
+        let bounds = window_bounds(&window)?;
 
-        let shell = WebviewBuilder::new(SHELL_WEBVIEW_LABEL, WebviewUrl::App("index.html".into()))
-            .transparent(true);
-
+        let shell = WebviewBuilder::new(SHELL_WEBVIEW_LABEL, WebviewUrl::App("index.html".into()));
         let shell = window
-            .add_child(
-                shell,
-                PhysicalPosition::new(0, 0),
-                PhysicalSize::new(size.width, size.height),
-            )
+            .add_child(shell, bounds.position, bounds.size)
             .map_err(|e| AppError::WebView(format!("Failed to build shell webview: {}", e)))?;
 
         if let Ok(mut guard) = self.shell_webview.lock() {
@@ -68,8 +59,7 @@ impl WebViewManager {
         }
 
         self.create_whatsapp_child(&window, data_dir)?;
-        self.set_shell_bounds(&window, size, true)?;
-        self.set_whatsapp_bounds(&window, size)?;
+        self.apply_layout(&window)?;
 
         Ok(window)
     }
@@ -92,11 +82,7 @@ impl WebViewManager {
         }
 
         self.create_whatsapp_child(&window, data_dir)?;
-        let size = window
-            .inner_size()
-            .map_err(|e| AppError::Window(format!("Failed to read window size: {}", e)))?;
-        self.set_whatsapp_bounds(&window, size)?;
-        Ok(())
+        self.apply_layout(&window)
     }
 
     pub fn reload(&self) -> Result<(), AppError> {
@@ -114,45 +100,52 @@ impl WebViewManager {
             .map_err(|e| AppError::WebView(format!("Failed to navigate WhatsApp webview: {}", e)))
     }
 
-    pub fn set_whatsapp_visible(&self, visible: bool) -> Result<(), AppError> {
-        let webview = self.whatsapp_webview()?;
-        let result = if visible {
-            webview.show()
-        } else {
-            webview.hide()
-        };
-
-        result.map_err(|e| {
-            AppError::WebView(format!(
-                "Failed to {} WhatsApp webview: {}",
-                if visible { "show" } else { "hide" },
-                e
-            ))
-        })
-    }
-
-    pub fn set_shell_overlay_mode(&self, window: &Window, overlay: bool) -> Result<(), AppError> {
-        if let Ok(mut guard) = self.shell_overlay.lock() {
-            *guard = overlay;
+    pub fn set_overlay_visible(&self, window: &Window, visible: bool) -> Result<(), AppError> {
+        if let Ok(mut guard) = self.overlay_visible.lock() {
+            *guard = visible;
         }
-
-        let size = window
-            .inner_size()
-            .map_err(|e| AppError::Window(format!("Failed to read window size: {}", e)))?;
-        self.set_shell_bounds(window, size, overlay)
+        self.apply_layout(window)
     }
 
-    pub fn sync_whatsapp_bounds(&self, window: &Window) -> Result<(), AppError> {
-        let size = window
-            .inner_size()
-            .map_err(|e| AppError::Window(format!("Failed to read window size: {}", e)))?;
+    pub fn sync_bounds(&self, window: &Window) -> Result<(), AppError> {
+        self.apply_layout(window)
+    }
+
+    fn apply_layout(&self, window: &Window) -> Result<(), AppError> {
+        let bounds = window_bounds(window)?;
+        let shell = self.shell_webview()?;
+        let remote = self.whatsapp_webview()?;
+
+        shell
+            .set_bounds(bounds)
+            .map_err(|e| AppError::WebView(format!("Failed to resize shell webview: {}", e)))?;
+        remote
+            .set_bounds(bounds)
+            .map_err(|e| AppError::WebView(format!("Failed to resize WhatsApp webview: {}", e)))?;
+
         let overlay = self
-            .shell_overlay
+            .overlay_visible
             .lock()
             .map(|guard| *guard)
             .unwrap_or(true);
-        self.set_shell_bounds(window, size, overlay)?;
-        self.set_whatsapp_bounds(window, size)
+
+        if overlay {
+            remote.hide().map_err(|e| {
+                AppError::WebView(format!("Failed to hide WhatsApp webview: {}", e))
+            })?;
+            shell
+                .show()
+                .map_err(|e| AppError::WebView(format!("Failed to show shell webview: {}", e)))?;
+        } else {
+            remote.show().map_err(|e| {
+                AppError::WebView(format!("Failed to show WhatsApp webview: {}", e))
+            })?;
+            shell
+                .hide()
+                .map_err(|e| AppError::WebView(format!("Failed to hide shell webview: {}", e)))?;
+        }
+
+        Ok(())
     }
 
     fn create_whatsapp_child(
@@ -168,9 +161,11 @@ impl WebViewManager {
             .data_directory(data_dir)
             .enable_clipboard_access()
             .initialization_script_for_all_frames(whatsapp_init_script())
+            .initialization_script(navbar_script())
             .on_page_load(|webview, payload| {
                 if matches!(payload.event(), PageLoadEvent::Finished) {
                     let _ = webview.eval(whatsapp_init_script());
+                    let _ = webview.eval(navbar_script());
                 }
             })
             .on_navigation(handle_navigation)
@@ -190,12 +185,9 @@ impl WebViewManager {
                 tauri::webview::NewWindowResponse::Deny
             });
 
+        let bounds = window_bounds(window)?;
         let webview = window
-            .add_child(
-                builder,
-                LogicalPosition::new(SIDEBAR_WIDTH, 0.0),
-                LogicalSize::new(1.0, 1.0),
-            )
+            .add_child(builder, bounds.position, bounds.size)
             .map_err(|e| AppError::WebView(format!("Failed to build WhatsApp webview: {}", e)))?;
 
         if let Ok(mut guard) = self.remote_webview.lock() {
@@ -203,45 +195,6 @@ impl WebViewManager {
         }
 
         Ok(webview)
-    }
-
-    fn set_whatsapp_bounds(
-        &self,
-        window: &Window,
-        size: PhysicalSize<u32>,
-    ) -> Result<(), AppError> {
-        let webview = self.whatsapp_webview()?;
-        let logical = logical_size(window, size)?;
-        let width = (logical.width - SIDEBAR_WIDTH).max(0.0);
-
-        webview
-            .set_bounds(Rect {
-                position: LogicalPosition::new(SIDEBAR_WIDTH, 0.0).into(),
-                size: LogicalSize::new(width, logical.height).into(),
-            })
-            .map_err(|e| AppError::WebView(format!("Failed to resize WhatsApp webview: {}", e)))
-    }
-
-    fn set_shell_bounds(
-        &self,
-        window: &Window,
-        size: PhysicalSize<u32>,
-        overlay: bool,
-    ) -> Result<(), AppError> {
-        let webview = self.shell_webview()?;
-        let logical = logical_size(window, size)?;
-        let width = if overlay {
-            logical.width
-        } else {
-            SIDEBAR_WIDTH
-        };
-
-        webview
-            .set_bounds(Rect {
-                position: LogicalPosition::new(0.0, 0.0).into(),
-                size: LogicalSize::new(width, logical.height).into(),
-            })
-            .map_err(|e| AppError::WebView(format!("Failed to resize shell webview: {}", e)))
     }
 
     fn shell_webview(&self) -> Result<Webview, AppError> {
@@ -261,11 +214,19 @@ impl WebViewManager {
     }
 }
 
-fn logical_size(window: &Window, size: PhysicalSize<u32>) -> Result<LogicalSize<f64>, AppError> {
+fn window_bounds(window: &Window) -> Result<Rect, AppError> {
+    let size = window
+        .inner_size()
+        .map_err(|e| AppError::Window(format!("Failed to read window size: {}", e)))?;
     let factor = window
         .scale_factor()
         .map_err(|e| AppError::Window(format!("Failed to read window scale factor: {}", e)))?;
-    Ok(size.to_logical::<f64>(factor))
+    let logical = size.to_logical::<f64>(factor);
+
+    Ok(Rect {
+        position: LogicalPosition::new(0.0, 0.0).into(),
+        size: LogicalSize::new(logical.width, logical.height).into(),
+    })
 }
 
 fn whatsapp_url() -> Result<Url, AppError> {
@@ -291,6 +252,150 @@ fn handle_navigation(url: &Url) -> bool {
 
 fn js_string(value: &str) -> String {
     serde_json::to_string(value).unwrap_or_else(|_| "\"about:blank\"".to_string())
+}
+
+fn navbar_script() -> &'static str {
+    r##"
+(function () {
+  if (window.top !== window) return;
+  if (window.__WHATNULL_NAVBAR__) return;
+  window.__WHATNULL_NAVBAR__ = true;
+
+  const ICON_LOCK = '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path>';
+  const ICON_USERS = '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path>';
+  const ICON_SETTINGS = '<circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>';
+
+  const ACTIONS = [
+    { id: 'toggleLock', label: 'Privacy lock', icon: ICON_LOCK },
+    { id: 'openAccounts', label: 'Account profiles', icon: ICON_USERS },
+    { id: 'openSettings', label: 'Settings', icon: ICON_SETTINGS }
+  ];
+
+  const STYLE = `
+    :host { all: initial; }
+    .rail {
+      position: fixed;
+      top: 50%;
+      right: 0;
+      transform: translateY(-50%);
+      display: flex;
+      align-items: center;
+      gap: 0;
+      font-family: system-ui, sans-serif;
+    }
+    .grip {
+      width: 6px;
+      height: 64px;
+      border-radius: 4px 0 0 4px;
+      background: rgba(20, 184, 166, 0.55);
+      transition: background 160ms ease, width 160ms ease;
+    }
+    .panel {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 8px 6px;
+      width: 0;
+      padding-left: 0;
+      padding-right: 0;
+      overflow: hidden;
+      opacity: 0;
+      border-radius: 12px 0 0 12px;
+      background: rgba(17, 24, 39, 0.94);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-right: none;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+      transition: width 160ms ease, opacity 160ms ease, padding 160ms ease;
+    }
+    .rail:hover .panel, .rail:focus-within .panel {
+      width: 44px;
+      padding-left: 6px;
+      padding-right: 6px;
+      opacity: 1;
+    }
+    .rail:hover .grip, .rail:focus-within .grip { background: rgba(20, 184, 166, 0.9); }
+    button {
+      all: unset;
+      box-sizing: border-box;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      color: #d1d5db;
+      cursor: pointer;
+      transition: background 120ms ease, color 120ms ease;
+    }
+    button:hover { background: rgba(20, 184, 166, 0.16); color: #14b8a6; }
+    button:focus-visible { outline: 2px solid #14b8a6; outline-offset: 2px; }
+    svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    @media (prefers-reduced-motion: reduce) {
+      .grip, .panel, button { transition: none; }
+    }
+  `;
+
+  function send(action) {
+    const internals = window.__TAURI_INTERNALS__;
+    if (!internals || typeof internals.invoke !== 'function') return;
+    Promise.resolve(internals.invoke('request_shell_action', { action })).catch(() => {});
+  }
+
+  function build(root) {
+    const style = document.createElement('style');
+    style.textContent = STYLE;
+
+    const rail = document.createElement('div');
+    rail.className = 'rail';
+
+    const grip = document.createElement('div');
+    grip.className = 'grip';
+
+    const panel = document.createElement('div');
+    panel.className = 'panel';
+
+    ACTIONS.forEach((action) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.title = action.label;
+      button.setAttribute('aria-label', action.label);
+      button.innerHTML = '<svg viewBox="0 0 24 24">' + action.icon + '</svg>';
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        send(action.id);
+      });
+      panel.appendChild(button);
+    });
+
+    rail.appendChild(panel);
+    rail.appendChild(grip);
+    root.appendChild(style);
+    root.appendChild(rail);
+  }
+
+  function mount() {
+    if (!document.body || document.getElementById('whatnull-navbar')) return;
+    const host = document.createElement('div');
+    host.id = 'whatnull-navbar';
+    host.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;z-index:2147483646;';
+    build(host.attachShadow({ mode: 'closed' }));
+    document.body.appendChild(host);
+  }
+
+  function keepMounted() {
+    mount();
+    const observer = new MutationObserver(() => mount());
+    if (document.body) observer.observe(document.body, { childList: true });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', keepMounted, { once: true });
+  } else {
+    keepMounted();
+  }
+})();
+"##
 }
 
 fn whatsapp_init_script() -> &'static str {

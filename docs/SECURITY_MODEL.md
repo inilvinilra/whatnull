@@ -11,13 +11,15 @@ The app uses one native Tauri window with two child webviews:
 
 The two webviews are separate WebKit contexts. The remote surface cannot reach the shell's capability set, cannot read local files, and cannot open arbitrary windows.
 
-## The One Deliberate IPC Exception
+## Deliberate IPC Exceptions
 
-The remote `whatsapp` webview is granted exactly one command, `sanitize_upload_files`, through `capabilities/whatsapp-upload-sanitizer.json`. This capability is scoped to the `main` window, the `whatsapp` webview, and the remote origins `web.whatsapp.com`, `*.whatsapp.com`, and `*.whatsapp.net`.
+The remote `whatsapp` webview is granted exactly two commands. Both capabilities are scoped to the `main` window, the `whatsapp` webview, and the remote origins `web.whatsapp.com`, `*.whatsapp.com`, and `*.whatsapp.net`.
 
-This exists because attachment metadata must be stripped in the page that owns the file input, before the bytes reach WhatsApp. The command accepts file bytes and returns sanitized bytes. It takes no path argument and performs no filesystem traversal on caller-supplied paths.
+**`sanitize_upload_files`**, through `capabilities/whatsapp-upload-sanitizer.json`. Attachment metadata has to be stripped in the page that owns the file input, before the bytes reach WhatsApp. The command accepts file bytes and returns sanitized bytes. It takes no path argument and performs no filesystem traversal on caller-supplied input.
 
-The trade-off is explicit: a compromise of `web.whatsapp.com` could call this command. The blast radius is bounded to CPU and memory spent sanitizing attacker-supplied bytes in a temporary file. No other command is reachable from the remote surface.
+**`request_shell_action`**, through `capabilities/whatsapp-navbar.json`. The WhatNull navbar is injected into the WhatsApp page, so it needs a way to ask the local shell to open its own interface. The command takes a closed enum with three values: `openSettings`, `openAccounts`, `toggleLock`. Every one of them is a non-destructive interface toggle handled entirely by the local shell. No value carries data from the caller.
+
+The trade-off is explicit: a compromise of `web.whatsapp.com` could call both. For the sanitizer the blast radius is CPU and memory spent on attacker-supplied bytes in a temporary file. For the action channel it is the ability to raise the local shell's own windows, which is an annoyance rather than an escalation. Quitting, session reset, profile creation, deletion and switching, and configuration writes are all unreachable from the remote surface.
 
 ## Storage Isolation
 

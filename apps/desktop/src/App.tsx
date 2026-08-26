@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
-import { Sidebar } from './components/Sidebar'
 import { SettingsModal } from './components/SettingsModal'
 import { AccountSwitcherModal } from './components/AccountSwitcherModal'
 import { PrivacyOverlay } from './components/PrivacyOverlay'
 import { Onboarding } from './pages/Onboarding'
 import { useAppStore } from './stores/appStore'
 import { useConfigStore } from './stores/configStore'
+
+type ShellAction = 'openSettings' | 'openAccounts' | 'toggleLock'
 
 export function App() {
   const { onboardingCompleted } = useAppStore()
@@ -24,6 +25,28 @@ export function App() {
   useEffect(() => {
     const unlistenPromise = listen<boolean>('privacy_blur', (event) => {
       setIsBlurredByFocus(event.payload)
+    })
+
+    return () => {
+      unlistenPromise.then((unlisten) => unlisten())
+    }
+  }, [])
+
+  useEffect(() => {
+    const unlistenPromise = listen<ShellAction>('shell_action', (event) => {
+      switch (event.payload) {
+        case 'openSettings':
+          setIsAccountSwitcherOpen(false)
+          setIsSettingsOpen(true)
+          break
+        case 'openAccounts':
+          setIsSettingsOpen(false)
+          setIsAccountSwitcherOpen(true)
+          break
+        case 'toggleLock':
+          setIsManualLocked((prev) => !prev)
+          break
+      }
     })
 
     return () => {
@@ -50,18 +73,7 @@ export function App() {
       isManualLocked ||
       isBlurredByFocus
 
-    const syncWebviews = async () => {
-      if (overlay) {
-        await invoke('set_whatsapp_visible', { visible: false }).catch(() => {})
-        await invoke('set_shell_overlay_mode', { overlay: true }).catch(() => {})
-        return
-      }
-
-      await invoke('set_shell_overlay_mode', { overlay: false }).catch(() => {})
-      await invoke('set_whatsapp_visible', { visible: true }).catch(() => {})
-    }
-
-    syncWebviews()
+    invoke('set_overlay_visible', { visible: overlay }).catch(() => {})
   }, [
     onboardingCompleted,
     isSettingsOpen,
@@ -76,12 +88,6 @@ export function App() {
         isLockedManual={isManualLocked}
         isBlurredByFocus={isBlurredByFocus}
         onUnlockManual={() => setIsManualLocked(false)}
-      />
-
-      <Sidebar
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        onOpenAccountSwitcher={() => setIsAccountSwitcherOpen(true)}
-        onPrivacyLock={() => setIsManualLocked(true)}
       />
 
       {!onboardingCompleted && <Onboarding />}

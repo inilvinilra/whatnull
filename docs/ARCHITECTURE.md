@@ -12,17 +12,21 @@ One native desktop window holds two webviews:
 │ ┌──────────────────────┐  ┌───────────────────────────────┐ │
 │ │ shell webview        │  │ whatsapp webview              │ │
 │ │ Local React UI       │  │ https://web.whatsapp.com      │ │
-│ │ Full capability set  │  │ sanitize_upload_files only    │ │
+│ │ Full capability set  │  │ two scoped commands           │ │
+│ │ Shown on demand      │  │ Injected WhatNull navbar      │ │
 │ └──────────────────────┘  └───────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-The remote webview holds one narrowly scoped command so attachments can be stripped before upload. It holds no other capability. See [SECURITY_MODEL.md](SECURITY_MODEL.md).
+Both webviews fill the whole window and only one is visible at a time. WhatsApp is shown during normal use; the shell is raised over it for onboarding, the privacy lock, settings and the account switcher. GTK gives sibling webviews no usable stacking order, so visibility is switched explicitly rather than relying on z-order.
+
+The WhatNull navbar is injected into the WhatsApp page inside a closed shadow root, which is why the shell does not need a permanent strip of the window. The remote webview holds two narrowly scoped commands, one to strip attachment metadata and one to ask the shell to open its own interface. See [SECURITY_MODEL.md](SECURITY_MODEL.md).
 
 ## Runtime Controls
 
 - Navigation filtering keeps WhatsApp-owned surfaces inside the app and routes everything else to the system browser.
 - The remote webview is hidden while local modals or the privacy overlay are visible, which avoids native webview stacking problems while keeping a single window.
+- Both webviews are resized together from one place, so a window resize, a scale-factor change and a restored window position cannot leave one of them at stale bounds.
 - WebRTC local candidate filtering is injected into the remote webview as defense in depth. MAC addresses are not exposed to web content by any browser API, so WhatNull does not attempt to modify or spoof them.
 - Deleted-message preservation is an optional, disabled-by-default local DOM feature backed by an in-memory cache.
 - Metadata stripping for JPEG, PNG, and PDF runs in the privacy crate. Video and audio stripping shells out to `ffmpeg`.

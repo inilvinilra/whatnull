@@ -1,6 +1,7 @@
 use crate::app::AppState;
 use crate::error::AppErrorWrapper;
-use tauri::{AppHandle, Manager, State};
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Emitter, Manager, State};
 use whatnull_types::{
     is_valid_avatar_color, is_valid_display_name, is_valid_profile_id, AccountProfile, AppError,
 };
@@ -63,22 +64,19 @@ pub fn hard_reload_whatsapp(state: State<'_, AppState>) -> Result<(), AppErrorWr
         .map_err(AppErrorWrapper::from)
 }
 
-#[tauri::command]
-pub fn set_whatsapp_visible(
-    state: State<'_, AppState>,
-    visible: bool,
-) -> Result<(), AppErrorWrapper> {
-    state
-        .webview_manager
-        .set_whatsapp_visible(visible)
-        .map_err(AppErrorWrapper::from)
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ShellAction {
+    OpenSettings,
+    OpenAccounts,
+    ToggleLock,
 }
 
 #[tauri::command]
-pub fn set_shell_overlay_mode(
+pub fn request_shell_action(
     app_handle: AppHandle,
     state: State<'_, AppState>,
-    overlay: bool,
+    action: ShellAction,
 ) -> Result<(), AppErrorWrapper> {
     let window = app_handle.get_window("main").ok_or_else(|| {
         AppErrorWrapper::from(AppError::Window("Main window not found".to_string()))
@@ -86,7 +84,27 @@ pub fn set_shell_overlay_mode(
 
     state
         .webview_manager
-        .set_shell_overlay_mode(&window, overlay)
+        .set_overlay_visible(&window, true)
+        .map_err(AppErrorWrapper::from)?;
+
+    window
+        .emit("shell_action", action)
+        .map_err(|e| AppErrorWrapper::from(AppError::Internal(e.to_string())))
+}
+
+#[tauri::command]
+pub fn set_overlay_visible(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+    visible: bool,
+) -> Result<(), AppErrorWrapper> {
+    let window = app_handle.get_window("main").ok_or_else(|| {
+        AppErrorWrapper::from(AppError::Window("Main window not found".to_string()))
+    })?;
+
+    state
+        .webview_manager
+        .set_overlay_visible(&window, visible)
         .map_err(AppErrorWrapper::from)
 }
 

@@ -47,14 +47,22 @@ fn main() {
         Ok(whatnull_platform::SingleInstanceResult::Secondary) => {
             std::process::exit(0);
         }
-        Err(_) => {
+        Err(error) => {
+            eprintln!(
+                "WhatNull could not claim its single-instance socket: {}",
+                error
+            );
             std::process::exit(1);
         }
     };
 
     let core = match whatnull_core::AppCore::new() {
         Ok(c) => c,
-        Err(_) => {
+        Err(error) => {
+            eprintln!(
+                "WhatNull could not claim its single-instance socket: {}",
+                error
+            );
             std::process::exit(1);
         }
     };
@@ -79,8 +87,8 @@ fn main() {
             crate::ipc::set_startup_enabled,
             crate::ipc::reload_whatsapp,
             crate::ipc::hard_reload_whatsapp,
-            crate::ipc::set_whatsapp_visible,
-            crate::ipc::set_shell_overlay_mode,
+            crate::ipc::set_overlay_visible,
+            crate::ipc::request_shell_action,
             crate::ipc::reset_session,
             crate::ipc::list_profiles,
             crate::ipc::create_profile,
@@ -108,8 +116,6 @@ fn main() {
                     Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>
                 })?;
 
-            let _ = webview_manager.set_whatsapp_visible(false);
-
             *MAIN_WINDOW.lock().unwrap() = Some(main_window.clone());
 
             let _ = crate::tray::init_tray(app);
@@ -129,7 +135,7 @@ fn main() {
                         if bounds.maximized {
                             let _ = main_window.maximize();
                         }
-                        let _ = webview_manager.sync_whatsapp_bounds(&main_window);
+                        let _ = webview_manager.sync_bounds(&main_window);
                     }
                 }
             }
@@ -141,7 +147,7 @@ fn main() {
 
             main_window.on_window_event(move |event| match event {
                 tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. } => {
-                    let _ = webview_manager_clone.sync_whatsapp_bounds(&main_window_clone);
+                    let _ = webview_manager_clone.sync_bounds(&main_window_clone);
                 }
                 tauri::WindowEvent::Focused(focused) => {
                     let cfg = config_manager_clone.read().unwrap().get().clone();

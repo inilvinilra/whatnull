@@ -11,9 +11,10 @@ Each account profile gets its own WebKit data directory, so cookies and storage 
 ## Capability Assignment
 
 - `capabilities/default.json` binds the application command set to the `shell` webview only.
-- `capabilities/whatsapp-upload-sanitizer.json` binds exactly one command, `sanitize_upload_files`, to the `whatsapp` webview, scoped to WhatsApp origins. See [SECURITY_MODEL.md](SECURITY_MODEL.md) for the reasoning and the accepted trade-off.
+- `capabilities/whatsapp-upload-sanitizer.json` binds `sanitize_upload_files` to the `whatsapp` webview, scoped to WhatsApp origins.
+- `capabilities/whatsapp-navbar.json` binds `request_shell_action` to the same webview and origins, for the injected navbar.
 
-No other command is reachable from the remote surface.
+See [SECURITY_MODEL.md](SECURITY_MODEL.md) for the reasoning and the accepted trade-off. No other command is reachable from the remote surface.
 
 ## Navigation Handling
 
@@ -23,7 +24,9 @@ WhatsApp's own tooling hosts, such as `flows.whatsapp.net` and `webtp.whatsapp.n
 
 ## Injected Script
 
-WhatNull injects a script into the remote surface for user-agent normalization, WebRTC local-candidate filtering, upload sanitization, and the optional deleted-message feature. The script runs in the page's own world, which means page script can observe and override it. It is defense in depth, not a security boundary.
+WhatNull injects two scripts into the remote surface. The first handles user-agent normalization, WebRTC local-candidate filtering, upload sanitization, and the optional deleted-message feature. The second mounts the WhatNull navbar in a closed shadow root, so WhatsApp's stylesheets and the navbar's own styles cannot reach each other.
+
+Both run in the page's own world, which means page script can observe and override them. They are defense in depth, not a security boundary.
 
 ## Known Gaps
 

@@ -249,6 +249,12 @@
           "markdownDescription": "Enables the reload_whatsapp command without any pre-configured scope."
         },
         {
+          "description": "Enables the request_shell_action command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-request-shell-action",
+          "markdownDescription": "Enables the request_shell_action command without any pre-configured scope."
+        },
+        {
           "description": "Enables the reset_session command without any pre-configured scope.",
           "type": "string",
           "const": "allow-reset-session",
@@ -261,22 +267,16 @@
           "markdownDescription": "Enables the sanitize_upload_files command without any pre-configured scope."
         },
         {
-          "description": "Enables the set_shell_overlay_mode command without any pre-configured scope.",
+          "description": "Enables the set_overlay_visible command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-set-shell-overlay-mode",
-          "markdownDescription": "Enables the set_shell_overlay_mode command without any pre-configured scope."
+          "const": "allow-set-overlay-visible",
+          "markdownDescription": "Enables the set_overlay_visible command without any pre-configured scope."
         },
         {
           "description": "Enables the set_startup_enabled command without any pre-configured scope.",
           "type": "string",
           "const": "allow-set-startup-enabled",
           "markdownDescription": "Enables the set_startup_enabled command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the set_whatsapp_visible command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-set-whatsapp-visible",
-          "markdownDescription": "Enables the set_whatsapp_visible command without any pre-configured scope."
         },
         {
           "description": "Enables the strip_file_metadata command without any pre-configured scope.",
@@ -369,6 +369,12 @@
           "markdownDescription": "Denies the reload_whatsapp command without any pre-configured scope."
         },
         {
+          "description": "Denies the request_shell_action command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-request-shell-action",
+          "markdownDescription": "Denies the request_shell_action command without any pre-configured scope."
+        },
+        {
           "description": "Denies the reset_session command without any pre-configured scope.",
           "type": "string",
           "const": "deny-reset-session",
@@ -381,22 +387,16 @@
           "markdownDescription": "Denies the sanitize_upload_files command without any pre-configured scope."
         },
         {
-          "description": "Denies the set_shell_overlay_mode command without any pre-configured scope.",
+          "description": "Denies the set_overlay_visible command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-set-shell-overlay-mode",
-          "markdownDescription": "Denies the set_shell_overlay_mode command without any pre-configured scope."
+          "const": "deny-set-overlay-visible",
+          "markdownDescription": "Denies the set_overlay_visible command without any pre-configured scope."
         },
         {
           "description": "Denies the set_startup_enabled command without any pre-configured scope.",
           "type": "string",
           "const": "deny-set-startup-enabled",
           "markdownDescription": "Denies the set_startup_enabled command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the set_whatsapp_visible command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-set-whatsapp-visible",
-          "markdownDescription": "Denies the set_whatsapp_visible command without any pre-configured scope."
         },
         {
           "description": "Denies the strip_file_metadata command without any pre-configured scope.",

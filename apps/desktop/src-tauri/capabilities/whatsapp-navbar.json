@@ -1,0 +1,14 @@
+{
+  "identifier": "whatsapp-navbar",
+  "description": "Lets the navbar injected into the WhatsApp page ask the local shell to open its own UI. The action set is closed and every action is a non-destructive UI toggle.",
+  "windows": ["main"],
+  "webviews": ["whatsapp"],
+  "remote": {
+    "urls": [
+      "https://web.whatsapp.com",
+      "https://*.whatsapp.com",
+      "https://*.whatsapp.net"
+    ]
+  },
+  "permissions": ["allow-request-shell-action"]
+}
