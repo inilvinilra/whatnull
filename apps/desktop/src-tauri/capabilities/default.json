@@ -1,0 +1,9 @@
+{
+  "identifier": "default",
+  "description": "Default permissions for WhatNull main window",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "event:default"
+  ]
+}

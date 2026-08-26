@@ -1,0 +1,12 @@
+[workspace]
+members = [
+    "apps/desktop/src-tauri",
+    "crates/whatnull_types",
+    "crates/whatnull_config",
+    "crates/whatnull_security",
+    "crates/whatnull_platform",
+    "crates/whatnull_storage",
+    "crates/whatnull_core",
+    "crates/whatnull_notification"
+]
+resolver = "2"

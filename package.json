@@ -1,0 +1,17 @@
+{
+  "name": "whatnull-monorepo",
+  "private": true,
+  "workspaces": [
+    "apps/desktop"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=apps/desktop",
+    "build": "npm run build --workspace=apps/desktop",
+    "tauri": "tauri",
+    "typecheck": "npm run typecheck --workspace=apps/desktop",
+    "lint": "npm run lint --workspace=apps/desktop"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}

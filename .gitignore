@@ -1,0 +1,32 @@
+# Rust build artifacts
+/target
+/crates/**/target
+apps/desktop/src-tauri/target
+
+# Node and UI build artifacts
+node_modules/
+apps/desktop/node_modules/
+dist/
+apps/desktop/dist/
+apps/desktop/dist-tauri/
+.vite/
+.eslintcache
+
+# Local WhatNull profile & test dirs
+.session_data/
+logs/
+*.log
+*.tmp
+local_test_config.json
+
+# IDEs & OS files
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+
+# Credentials & environment
+.env
+.env.*
+!.env.example

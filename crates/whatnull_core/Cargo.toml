@@ -1,0 +1,11 @@
+[package]
+name = "whatnull_core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+whatnull_types = { path = "../whatnull_types" }
+whatnull_platform = { path = "../whatnull_platform" }
+whatnull_config = { path = "../whatnull_config" }
+whatnull_storage = { path = "../whatnull_storage" }
+whatnull_notification = { path = "../whatnull_notification" }
