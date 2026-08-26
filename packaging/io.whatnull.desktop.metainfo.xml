@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.whatnull.desktop</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>WhatNull</name>
+  <summary>Open source, Linux-first, secure WhatsApp desktop client</summary>
+
+  <description>
+    <p>
+      WhatNull is an open source, privacy-first, low-resource WhatsApp desktop client engineered specifically for Linux desktop environments.
+    </p>
+    <p>Key Features:</p>
+    <ul>
+      <li>Privacy Protection: Focus blur overlays and zero telemetry by default</li>
+      <li>Multi-Account Support: Fully isolated WebKit session partitions</li>
+      <li>Low Resource Overhead: Lightweight Rust (Tauri v2) backend</li>
+      <li>Linux First: Native system notifications, system tray, and Wayland support</li>
+      <li>Navigation Security: External browser routing for non-WhatsApp links</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">io.whatnull.desktop.desktop</launchable>
+
+  <url type="homepage">https://github.com/inilvinilra/whatnull</url>
+  <url type="bugtracker">https://github.com/inilvinilra/whatnull/issues</url>
+
+  <provides>
+    <binary>whatnull</binary>
+  </provides>
+
+  <releases>
+    <release version="0.1.0" date="2026-08-27">
+      <description>
+        <p>Initial release of WhatNull featuring secure WebView sandbox, privacy focus blur, and multi-account profile isolation.</p>
+      </description>
+    </release>
+  </releases>
+</component>
