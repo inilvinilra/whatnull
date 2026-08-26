@@ -7,6 +7,7 @@ members = [
     "crates/whatnull_platform",
     "crates/whatnull_storage",
     "crates/whatnull_core",
-    "crates/whatnull_notification"
+    "crates/whatnull_notification",
+    "crates/whatnull_privacy"
 ]
 resolver = "2"

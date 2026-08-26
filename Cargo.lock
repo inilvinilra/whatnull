@@ -1496,6 +1496,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "img-parts"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b4e24cfdc6f897b582508e3c382eaf5378076898f80500a80d10d761ae85e90"
+dependencies = [
+ "bytes",
+ "crc32fast",
+ "miniz_oxide",
+]
+
+[[package]]
 name = "indexmap"
 version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4052,6 +4063,7 @@ dependencies = [
  "whatnull_core",
  "whatnull_notification",
  "whatnull_platform",
+ "whatnull_privacy",
  "whatnull_security",
  "whatnull_storage",
  "whatnull_types",
@@ -4096,6 +4108,15 @@ dependencies = [
  "serde",
  "thiserror 1.0.69",
  "whatnull_types",
+]
+
+[[package]]
+name = "whatnull_privacy"
+version = "0.1.0"
+dependencies = [
+ "img-parts",
+ "serde",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
