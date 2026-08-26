@@ -16,9 +16,8 @@ impl WebViewManager {
     }
 
     /// Build the main WhatsApp Desktop window dynamically with:
-    /// - Fast, non-blocking UserScript initialization
-    /// - Clean Anti-Revoke (DOM & JSON payload interception without Object.prototype pollution)
-    /// - Voice & Video Call activation (Chrome macOS User-Agent)
+    /// - Live DOM Message Caching & Anti-Revoke Recovery (Continuously caches live text & restores deleted messages inside bubbles)
+    /// - WhatsApp Voice & Video Calling activation (Spoofs macOS Chrome + MediaDevices input/output enumeration)
     /// - WebRTC local IP leak protection
     /// - Floating glassmorphic control pill & settings modal
     pub fn create_whatsapp_webview(
@@ -43,7 +42,7 @@ impl WebViewManager {
             if (window.__WHATNULL_INITIALIZED__) return;
             window.__WHATNULL_INITIALIZED__ = true;
 
-            // 1. SAFE DEVICE & USER-AGENT SPOOFING (Enables Voice & Video Call Buttons)
+            // 1. DEVICE & CALLING SPOOFING (Activates WhatsApp Voice 📞 & Video 📹 Calls)
             try {
                 const fakeUA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
                 Object.defineProperty(navigator, 'userAgent', { get: () => fakeUA, configurable: true });
@@ -52,6 +51,17 @@ impl WebViewManager {
                 Object.defineProperty(navigator, 'vendor', { get: () => 'Google Inc.', configurable: true });
                 Object.defineProperty(navigator, 'deviceMemory', { get: () => 8, configurable: true });
                 Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8, configurable: true });
+
+                // Mock Media Devices Enumeration so WhatsApp Calling Module detects Mic & Camera
+                if (navigator.mediaDevices) {
+                    navigator.mediaDevices.enumerateDevices = function() {
+                        return Promise.resolve([
+                            { deviceId: 'default-mic', kind: 'audioinput', label: 'Default Microphone', groupId: 'group1' },
+                            { deviceId: 'default-cam', kind: 'videoinput', label: 'Default HD Camera', groupId: 'group2' },
+                            { deviceId: 'default-spk', kind: 'audiooutput', label: 'Default Speaker', groupId: 'group1' }
+                        ]);
+                    };
+                }
             } catch(e) {}
 
             // 2. WEBRTC LOCAL IP & MAC LEAK PREVENTION
@@ -74,43 +84,57 @@ impl WebViewManager {
                 }
             } catch(e) {}
 
-            // 3. SAFE ANTI-REVOKE (JSON PARSE & DOM OBSERVER)
-            const msgCache = new Map();
-            try {
-                const origParse = JSON.parse;
-                JSON.parse = function(...args) {
-                    const res = origParse.apply(this, args);
-                    try {
-                        if (res && typeof res === 'object') {
-                            if (res.body && res.id) {
-                                const idStr = typeof res.id === 'object' ? (res.id._serialized || res.id.id) : res.id;
-                                if (idStr) msgCache.set(idStr, res.body);
+            // 3. LIVE DOM MESSAGE CACHE & ANTI-REVOKE RECOVERY
+            const liveMessageCache = new Map();
+
+            function captureAndRestoreMessages() {
+                try {
+                    const rows = document.querySelectorAll('div[role="row"], div[data-id]');
+                    rows.forEach(row => {
+                        const msgId = row.getAttribute('data-id') || row.getAttribute('id');
+                        if (!msgId) return;
+
+                        const isDeletedMarker = row.textContent.includes('This message was deleted') || 
+                                                row.textContent.includes('Bu mesaj silindi') || 
+                                                row.textContent.includes('Сообщение удалено');
+
+                        if (!isDeletedMarker) {
+                            // Message is live: Cache its text & HTML
+                            const contentNode = row.querySelector('.copyable-text, .selectable-text') || row;
+                            if (contentNode && contentNode.innerText && contentNode.innerText.trim().length > 0) {
+                                liveMessageCache.set(msgId, {
+                                    html: contentNode.innerHTML,
+                                    text: contentNode.innerText,
+                                    time: new Date().toLocaleTimeString()
+                                });
+                            }
+                        } else {
+                            // Message IS deleted: Restore original cached content!
+                            if (!row.dataset.whatnullRestored) {
+                                row.dataset.whatnullRestored = 'true';
+                                const cached = liveMessageCache.get(msgId);
+                                const targetNode = row.querySelector('.copyable-text, .selectable-text') || row;
+                                
+                                if (cached) {
+                                    targetNode.innerHTML = `
+                                        <div style="background: rgba(239, 68, 68, 0.14); border-left: 4px solid #ef4444; padding: 6px 10px; border-radius: 6px; margin: 4px 0;">
+                                            <div style="color: #ef4444; font-size: 11px; font-weight: bold; margin-bottom: 4px;">🛡️ [Preserved by WhatNull - Deleted at ${cached.time}]</div>
+                                            <div style="color: #f3f4f6;">${cached.html}</div>
+                                        </div>
+                                    `;
+                                } else {
+                                    targetNode.innerHTML = `
+                                        <div style="background: rgba(239, 68, 68, 0.14); border-left: 4px solid #ef4444; padding: 6px 10px; border-radius: 6px; margin: 4px 0;">
+                                            <div style="color: #ef4444; font-size: 11px; font-weight: bold;">🛡️ [Preserved by WhatNull] Message deleted by sender</div>
+                                        </div>
+                                    `;
+                                }
                             }
                         }
-                    } catch(err) {}
-                    return res;
-                };
-            } catch(e) {}
-
-            function checkAndPreserveDeletedMessages() {
-                const spans = document.getElementsByTagName('span');
-                for (let i = 0; i < spans.length; i++) {
-                    const span = spans[i];
-                    const text = span.textContent || '';
-                    if ((text.includes('This message was deleted') || text.includes('Bu mesaj silindi') || text.includes('Сообщение удалено')) && !span.dataset.whatnullHandled) {
-                        span.dataset.whatnullHandled = 'true';
-                        span.style.color = '#ef4444';
-                        span.style.fontWeight = 'bold';
-                        span.textContent = '🛡️ [Preserved by WhatNull] ' + text;
-                        const row = span.closest('div[role="row"]');
-                        if (row) {
-                            row.style.borderLeft = '4px solid #ef4444';
-                            row.style.backgroundColor = 'rgba(239, 68, 68, 0.12)';
-                        }
-                    }
-                }
+                    });
+                } catch(err) {}
             }
-            setInterval(checkAndPreserveDeletedMessages, 1000);
+            setInterval(captureAndRestoreMessages, 400);
 
             // 4. FLOATING UI SIDEBAR & SETTINGS MODAL
             function initUI() {
