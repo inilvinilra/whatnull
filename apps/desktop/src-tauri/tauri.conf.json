@@ -9,16 +9,7 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [
-      {
-        "title": "WhatNull",
-        "width": 1024,
-        "height": 768,
-        "resizable": true,
-        "fullscreen": false,
-        "label": "main"
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": null
     }

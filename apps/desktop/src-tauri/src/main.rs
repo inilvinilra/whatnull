@@ -89,18 +89,17 @@ fn main() {
             crate::privacy::inspect_file_metadata,
         ])
         .setup(move |app| {
-            let main_window = app.get_webview_window("main").ok_or_else(|| {
-                tauri::Error::WindowNotFound
-            })?;
+            let active_pid = config_manager.read().unwrap().get().accounts.active_profile_id.clone();
+            let profile_data_dir = storage_manager.get_profile_data_dir(&active_pid);
+            let _ = storage_manager.ensure_dirs(&active_pid);
+
+            let main_window = webview_manager
+                .create_whatsapp_webview(app.handle(), profile_data_dir)
+                .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) as Box<dyn std::error::Error>)?;
 
             *MAIN_WINDOW.lock().unwrap() = Some(main_window.clone());
 
             let _ = crate::tray::init_tray(app);
-
-            let active_pid = config_manager.read().unwrap().get().accounts.active_profile_id.clone();
-            let profile_data_dir = storage_manager.get_profile_data_dir(&active_pid);
-            let _ = storage_manager.ensure_dirs(&active_pid);
-            let _ = webview_manager.create_whatsapp_webview(app.handle(), profile_data_dir);
 
             let state_file = state_dir.join("window_bounds.json");
             let config = config_manager.read().unwrap().get().clone();
