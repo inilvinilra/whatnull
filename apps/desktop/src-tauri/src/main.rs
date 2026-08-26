@@ -127,17 +127,6 @@ fn main() {
             let config_manager_clone = config_manager.clone();
 
             main_window.on_window_event(move |event| match event {
-                tauri::WindowEvent::Resized(physical_size) => {
-                    if let Ok(factor) = main_window_clone.scale_factor() {
-                        let logical_size = physical_size.to_logical::<f64>(factor);
-                        if let Some(child_webview) = main_window_clone.get_webview("whatsapp_remote") {
-                            let sidebar_width = 60.0;
-                            let webview_width = (logical_size.width - sidebar_width).max(100.0);
-                            let _ = child_webview.set_position(tauri::LogicalPosition::new(sidebar_width, 0.0));
-                            let _ = child_webview.set_size(tauri::LogicalSize::new(webview_width, logical_size.height));
-                        }
-                    }
-                }
                 tauri::WindowEvent::Focused(focused) => {
                     let cfg = config_manager_clone.read().unwrap().get().clone();
                     if !*focused && cfg.privacy.blur_on_unfocus {
