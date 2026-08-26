@@ -4357,6 +4357,7 @@ checksum = "d4ca08e5ef825b65b056d9efbd95c8750683f0a6d0466d02e96dc2e4e360f3d2"
 name = "whatnull"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "open",
  "serde",
  "serde_json",

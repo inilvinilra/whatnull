@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-sanitize-upload-files"
+description = "Enables the sanitize_upload_files command without any pre-configured scope."
+commands.allow = ["sanitize_upload_files"]
+
+[[permission]]
+identifier = "deny-sanitize-upload-files"
+description = "Denies the sanitize_upload_files command without any pre-configured scope."
+commands.deny = ["sanitize_upload_files"]

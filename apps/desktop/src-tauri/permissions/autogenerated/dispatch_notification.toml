@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-dispatch-notification"
+description = "Enables the dispatch_notification command without any pre-configured scope."
+commands.allow = ["dispatch_notification"]
+
+[[permission]]
+identifier = "deny-dispatch-notification"
+description = "Denies the dispatch_notification command without any pre-configured scope."
+commands.deny = ["dispatch_notification"]

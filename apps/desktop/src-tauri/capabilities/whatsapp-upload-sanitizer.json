@@ -1,0 +1,14 @@
+{
+  "identifier": "whatsapp-upload-sanitizer",
+  "description": "Allows the isolated WhatsApp webview to sanitize user-selected upload bytes without filesystem access.",
+  "windows": ["main"],
+  "webviews": ["whatsapp"],
+  "remote": {
+    "urls": [
+      "https://web.whatsapp.com",
+      "https://*.whatsapp.com",
+      "https://*.whatsapp.net"
+    ]
+  },
+  "permissions": ["allow-sanitize-upload-files"]
+}

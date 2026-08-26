@@ -177,6 +177,222 @@
       "description": "Permission identifier",
       "oneOf": [
         {
+          "description": "Enables the create_profile command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-create-profile",
+          "markdownDescription": "Enables the create_profile command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the delete_profile command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-delete-profile",
+          "markdownDescription": "Enables the delete_profile command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the dispatch_notification command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-dispatch-notification",
+          "markdownDescription": "Enables the dispatch_notification command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_app_version command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-get-app-version",
+          "markdownDescription": "Enables the get_app_version command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_platform_info command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-get-platform-info",
+          "markdownDescription": "Enables the get_platform_info command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_startup_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-get-startup-status",
+          "markdownDescription": "Enables the get_startup_status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the hard_reload_whatsapp command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-hard-reload-whatsapp",
+          "markdownDescription": "Enables the hard_reload_whatsapp command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the inspect_file_metadata command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-inspect-file-metadata",
+          "markdownDescription": "Enables the inspect_file_metadata command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the list_profiles command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-list-profiles",
+          "markdownDescription": "Enables the list_profiles command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the quit_app command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-quit-app",
+          "markdownDescription": "Enables the quit_app command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the reload_whatsapp command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-reload-whatsapp",
+          "markdownDescription": "Enables the reload_whatsapp command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the reset_session command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-reset-session",
+          "markdownDescription": "Enables the reset_session command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the sanitize_upload_files command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-sanitize-upload-files",
+          "markdownDescription": "Enables the sanitize_upload_files command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the set_shell_overlay_mode command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-set-shell-overlay-mode",
+          "markdownDescription": "Enables the set_shell_overlay_mode command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the set_startup_enabled command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-set-startup-enabled",
+          "markdownDescription": "Enables the set_startup_enabled command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the set_whatsapp_visible command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-set-whatsapp-visible",
+          "markdownDescription": "Enables the set_whatsapp_visible command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the strip_file_metadata command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-strip-file-metadata",
+          "markdownDescription": "Enables the strip_file_metadata command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the switch_profile command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-switch-profile",
+          "markdownDescription": "Enables the switch_profile command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the create_profile command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-create-profile",
+          "markdownDescription": "Denies the create_profile command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the delete_profile command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-delete-profile",
+          "markdownDescription": "Denies the delete_profile command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the dispatch_notification command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-dispatch-notification",
+          "markdownDescription": "Denies the dispatch_notification command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_app_version command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-get-app-version",
+          "markdownDescription": "Denies the get_app_version command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_platform_info command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-get-platform-info",
+          "markdownDescription": "Denies the get_platform_info command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_startup_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-get-startup-status",
+          "markdownDescription": "Denies the get_startup_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the hard_reload_whatsapp command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-hard-reload-whatsapp",
+          "markdownDescription": "Denies the hard_reload_whatsapp command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the inspect_file_metadata command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-inspect-file-metadata",
+          "markdownDescription": "Denies the inspect_file_metadata command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the list_profiles command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-list-profiles",
+          "markdownDescription": "Denies the list_profiles command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the quit_app command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-quit-app",
+          "markdownDescription": "Denies the quit_app command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the reload_whatsapp command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-reload-whatsapp",
+          "markdownDescription": "Denies the reload_whatsapp command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the reset_session command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-reset-session",
+          "markdownDescription": "Denies the reset_session command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the sanitize_upload_files command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-sanitize-upload-files",
+          "markdownDescription": "Denies the sanitize_upload_files command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_shell_overlay_mode command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-set-shell-overlay-mode",
+          "markdownDescription": "Denies the set_shell_overlay_mode command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_startup_enabled command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-set-startup-enabled",
+          "markdownDescription": "Denies the set_startup_enabled command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_whatsapp_visible command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-set-whatsapp-visible",
+          "markdownDescription": "Denies the set_whatsapp_visible command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the strip_file_metadata command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-strip-file-metadata",
+          "markdownDescription": "Denies the strip_file_metadata command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the switch_profile command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-switch-profile",
+          "markdownDescription": "Denies the switch_profile command without any pre-configured scope."
+        },
+        {
           "description": "Default core plugins set.\n#### This default permission set includes:\n\n- `core:path:default`\n- `core:event:default`\n- `core:window:default`\n- `core:webview:default`\n- `core:app:default`\n- `core:image:default`\n- `core:resources:default`\n- `core:menu:default`\n- `core:tray:default`",
           "type": "string",
           "const": "core:default",

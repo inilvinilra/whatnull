@@ -89,6 +89,7 @@ fn main() {
             crate::notification::dispatch_notification,
             crate::privacy::strip_file_metadata,
             crate::privacy::inspect_file_metadata,
+            crate::privacy::sanitize_upload_files,
         ])
         .setup(move |app| {
             let active_pid = config_manager
@@ -128,6 +129,7 @@ fn main() {
                         if bounds.maximized {
                             let _ = main_window.maximize();
                         }
+                        let _ = webview_manager.sync_whatsapp_bounds(&main_window);
                     }
                 }
             }

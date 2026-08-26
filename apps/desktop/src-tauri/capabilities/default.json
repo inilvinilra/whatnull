@@ -7,6 +7,23 @@
     "core:event:default",
     "core:window:default",
     "core:webview:default",
-    "core:tray:default"
+    "core:tray:default",
+    "allow-quit-app",
+    "allow-get-app-version",
+    "allow-get-platform-info",
+    "allow-get-startup-status",
+    "allow-set-startup-enabled",
+    "allow-reload-whatsapp",
+    "allow-hard-reload-whatsapp",
+    "allow-set-whatsapp-visible",
+    "allow-set-shell-overlay-mode",
+    "allow-reset-session",
+    "allow-list-profiles",
+    "allow-create-profile",
+    "allow-switch-profile",
+    "allow-delete-profile",
+    "allow-dispatch-notification",
+    "allow-strip-file-metadata",
+    "allow-inspect-file-metadata"
   ]
 }

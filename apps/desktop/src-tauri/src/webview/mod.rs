@@ -2,8 +2,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use tauri::{
-    AppHandle, LogicalPosition, LogicalSize, Manager, PhysicalSize, Size, Url, Webview,
-    WebviewBuilder, WebviewUrl, Window, WindowBuilder,
+    webview::PageLoadEvent, AppHandle, LogicalPosition, LogicalSize, Manager, PhysicalPosition,
+    PhysicalSize, Rect, Url, Webview, WebviewBuilder, WebviewUrl, Window, WindowBuilder,
 };
 use whatnull_security::{NavigationDecision, NavigationPolicy};
 use whatnull_types::AppError;
@@ -56,7 +56,11 @@ impl WebViewManager {
             .transparent(true);
 
         let shell = window
-            .add_child(shell, LogicalPosition::new(0.0, 0.0), size)
+            .add_child(
+                shell,
+                PhysicalPosition::new(0, 0),
+                PhysicalSize::new(size.width, size.height),
+            )
             .map_err(|e| AppError::WebView(format!("Failed to build shell webview: {}", e)))?;
 
         if let Ok(mut guard) = self.shell_webview.lock() {
@@ -64,7 +68,7 @@ impl WebViewManager {
         }
 
         self.create_whatsapp_child(&window, data_dir)?;
-        self.set_shell_bounds(size, true)?;
+        self.set_shell_bounds(&window, size, true)?;
         self.set_whatsapp_bounds(&window, size)?;
 
         Ok(window)
@@ -135,7 +139,7 @@ impl WebViewManager {
         let size = window
             .inner_size()
             .map_err(|e| AppError::Window(format!("Failed to read window size: {}", e)))?;
-        self.set_shell_bounds(size, overlay)
+        self.set_shell_bounds(window, size, overlay)
     }
 
     pub fn sync_whatsapp_bounds(&self, window: &Window) -> Result<(), AppError> {
@@ -147,7 +151,7 @@ impl WebViewManager {
             .lock()
             .map(|guard| *guard)
             .unwrap_or(true);
-        self.set_shell_bounds(size, overlay)?;
+        self.set_shell_bounds(window, size, overlay)?;
         self.set_whatsapp_bounds(window, size)
     }
 
@@ -163,7 +167,12 @@ impl WebViewManager {
             .user_agent(whatsapp_user_agent())
             .data_directory(data_dir)
             .enable_clipboard_access()
-            .initialization_script(whatsapp_init_script())
+            .initialization_script_for_all_frames(whatsapp_init_script())
+            .on_page_load(|webview, payload| {
+                if matches!(payload.event(), PageLoadEvent::Finished) {
+                    let _ = webview.eval(whatsapp_init_script());
+                }
+            })
             .on_navigation(handle_navigation)
             .on_new_window(move |url, _features| {
                 match NavigationPolicy::evaluate(url.as_str()) {
@@ -185,7 +194,7 @@ impl WebViewManager {
             .add_child(
                 builder,
                 LogicalPosition::new(SIDEBAR_WIDTH, 0.0),
-                LogicalSize::new(1220.0, 800.0),
+                LogicalSize::new(1.0, 1.0),
             )
             .map_err(|e| AppError::WebView(format!("Failed to build WhatsApp webview: {}", e)))?;
 
@@ -198,31 +207,39 @@ impl WebViewManager {
 
     fn set_whatsapp_bounds(
         &self,
-        _window: &Window,
+        window: &Window,
         size: PhysicalSize<u32>,
     ) -> Result<(), AppError> {
         let webview = self.whatsapp_webview()?;
-        let width = (size.width as f64 - SIDEBAR_WIDTH).max(0.0);
-        let height = size.height as f64;
+        let logical = logical_size(window, size)?;
+        let width = (logical.width - SIDEBAR_WIDTH).max(0.0);
 
         webview
-            .set_position(LogicalPosition::new(SIDEBAR_WIDTH, 0.0))
-            .and_then(|_| webview.set_size(Size::Logical(LogicalSize::new(width, height))))
+            .set_bounds(Rect {
+                position: LogicalPosition::new(SIDEBAR_WIDTH, 0.0).into(),
+                size: LogicalSize::new(width, logical.height).into(),
+            })
             .map_err(|e| AppError::WebView(format!("Failed to resize WhatsApp webview: {}", e)))
     }
 
-    fn set_shell_bounds(&self, size: PhysicalSize<u32>, overlay: bool) -> Result<(), AppError> {
+    fn set_shell_bounds(
+        &self,
+        window: &Window,
+        size: PhysicalSize<u32>,
+        overlay: bool,
+    ) -> Result<(), AppError> {
         let webview = self.shell_webview()?;
+        let logical = logical_size(window, size)?;
         let width = if overlay {
-            size.width as f64
+            logical.width
         } else {
             SIDEBAR_WIDTH
         };
 
         webview
-            .set_position(LogicalPosition::new(0.0, 0.0))
-            .and_then(|_| {
-                webview.set_size(Size::Logical(LogicalSize::new(width, size.height as f64)))
+            .set_bounds(Rect {
+                position: LogicalPosition::new(0.0, 0.0).into(),
+                size: LogicalSize::new(width, logical.height).into(),
             })
             .map_err(|e| AppError::WebView(format!("Failed to resize shell webview: {}", e)))
     }
@@ -242,6 +259,13 @@ impl WebViewManager {
             .and_then(|guard| guard.clone())
             .ok_or_else(|| AppError::WebView("WhatsApp webview instance not found".to_string()))
     }
+}
+
+fn logical_size(window: &Window, size: PhysicalSize<u32>) -> Result<LogicalSize<f64>, AppError> {
+    let factor = window
+        .scale_factor()
+        .map_err(|e| AppError::Window(format!("Failed to read window scale factor: {}", e)))?;
+    Ok(size.to_logical::<f64>(factor))
 }
 
 fn whatsapp_url() -> Result<Url, AppError> {
@@ -274,6 +298,14 @@ fn whatsapp_init_script() -> &'static str {
 (function () {
   if (window.__WHATNULL_INITIALIZED__) return;
   window.__WHATNULL_INITIALIZED__ = true;
+  window.__WHATNULL_STATUS__ = {
+    initializedAt: new Date().toISOString(),
+    nativeSanitizer: false,
+    lastSanitize: null,
+    antiRevokeCacheSize: 0,
+    webrtcLocalCandidateDrops: 0,
+    inlineMediaEnhanced: 0
+  };
 
   const INTERNAL_ORIGINS = new Set([
     'https://web.whatsapp.com',
@@ -336,12 +368,19 @@ fn whatsapp_init_script() -> &'static str {
     return value.replace(/^a=candidate:.*(?:\s|^)(?:10\.|127\.|169\.254\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|::1|fc[0-9a-f]{2}:|fd[0-9a-f]{2}:|fe80:).*[\r\n]*/gmi, '');
   }
 
+  function isLocalCandidate(value) {
+    return !!value && typeof value === 'string' && scrubLocalCandidates(value) === '';
+  }
+
   try {
     if (window.RTCPeerConnection) {
       const proto = window.RTCPeerConnection.prototype;
       const createOffer = proto.createOffer;
       const createAnswer = proto.createAnswer;
       const addIceCandidate = proto.addIceCandidate;
+      const addEventListener = proto.addEventListener;
+      const removeEventListener = proto.removeEventListener;
+      const listenerMap = new WeakMap();
 
       if (createOffer) {
         proto.createOffer = function (...args) {
@@ -370,6 +409,59 @@ fn whatsapp_init_script() -> &'static str {
           return addIceCandidate.call(this, candidate, ...args);
         };
       }
+
+      function wrapIceCandidateListener(listener) {
+        if (!listener) return listener;
+        if (listenerMap.has(listener)) return listenerMap.get(listener);
+        const wrapped = function (event) {
+          const raw = event && event.candidate && event.candidate.candidate;
+          if (isLocalCandidate(raw)) {
+            window.__WHATNULL_STATUS__.webrtcLocalCandidateDrops += 1;
+            return;
+          }
+          if (typeof listener === 'function') {
+            return listener.call(this, event);
+          }
+          if (listener && typeof listener.handleEvent === 'function') {
+            return listener.handleEvent(event);
+          }
+        };
+        listenerMap.set(listener, wrapped);
+        return wrapped;
+      }
+
+      if (addEventListener) {
+        proto.addEventListener = function (type, listener, options) {
+          if (type === 'icecandidate') {
+            return addEventListener.call(this, type, wrapIceCandidateListener(listener), options);
+          }
+          return addEventListener.call(this, type, listener, options);
+        };
+      }
+
+      if (removeEventListener) {
+        proto.removeEventListener = function (type, listener, options) {
+          if (type === 'icecandidate' && listenerMap.has(listener)) {
+            return removeEventListener.call(this, type, listenerMap.get(listener), options);
+          }
+          return removeEventListener.call(this, type, listener, options);
+        };
+      }
+
+      try {
+        const onIce = Object.getOwnPropertyDescriptor(proto, 'onicecandidate');
+        if (onIce && onIce.set && onIce.get) {
+          Object.defineProperty(proto, 'onicecandidate', {
+            configurable: true,
+            get() {
+              return onIce.get.call(this);
+            },
+            set(listener) {
+              return onIce.set.call(this, wrapIceCandidateListener(listener));
+            }
+          });
+        }
+      } catch (_) {}
     }
   } catch (_) {}
 
@@ -400,6 +492,7 @@ fn whatsapp_init_script() -> &'static str {
               text,
               time: new Date().toLocaleTimeString()
             });
+            window.__WHATNULL_STATUS__.antiRevokeCacheSize = liveMessageCache.size;
           }
           return;
         }
@@ -448,6 +541,78 @@ fn whatsapp_init_script() -> &'static str {
     });
   }
 
+  function isNativeSanitizable(file) {
+    return /^(image\/(jpeg|png)|application\/pdf|video\/(mp4|quicktime|x-msvideo|x-matroska|webm)|audio\/(mpeg|wav|ogg|flac))$/.test(file.type);
+  }
+
+  function arrayBufferToBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+    }
+    return btoa(binary);
+  }
+
+  function base64ToBlob(base64, mimeType) {
+    const binary = atob(base64);
+    const chunks = [];
+    const chunkSize = 0x8000;
+    for (let i = 0; i < binary.length; i += chunkSize) {
+      const slice = binary.slice(i, i + chunkSize);
+      const bytes = new Uint8Array(slice.length);
+      for (let j = 0; j < slice.length; j += 1) {
+        bytes[j] = slice.charCodeAt(j);
+      }
+      chunks.push(bytes);
+    }
+    return new Blob(chunks, { type: mimeType });
+  }
+
+  async function sanitizeFilesWithNative(files) {
+    const invoke = window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke;
+    if (!invoke) return null;
+
+    const sanitizable = files.filter(isNativeSanitizable);
+    if (!sanitizable.length) return null;
+
+    const payload = await Promise.all(sanitizable.map(async (file) => ({
+      name: file.name,
+      mimeType: file.type,
+      dataBase64: arrayBufferToBase64(await file.arrayBuffer())
+    })));
+
+    const results = await invoke('sanitize_upload_files', { files: payload });
+    const byName = new Map(results.map((item) => [item.name, item]));
+    let changed = false;
+
+    const sanitizedFiles = files.map((file) => {
+      const result = byName.get(file.name);
+      if (!result) return file;
+      const blob = base64ToBlob(result.dataBase64, result.mimeType || file.type);
+      changed = changed || result.changed || blob.size !== file.size;
+      return new File([blob], file.name, {
+        type: result.mimeType || file.type,
+        lastModified: Date.now()
+      });
+    });
+
+    window.__WHATNULL_STATUS__.nativeSanitizer = true;
+    window.__WHATNULL_STATUS__.lastSanitize = {
+      at: new Date().toISOString(),
+      files: results.map((item) => ({
+        name: item.name,
+        changed: item.changed,
+        fieldsRemoved: item.fieldsRemoved,
+        originalSize: item.originalSize,
+        strippedSize: item.strippedSize
+      }))
+    };
+
+    return { files: sanitizedFiles, changed };
+  }
+
   document.addEventListener('change', async (event) => {
     const input = event.target;
     if (!input || input.tagName !== 'INPUT' || input.type !== 'file' || !input.files || !input.files.length) return;
@@ -458,11 +623,21 @@ fn whatsapp_init_script() -> &'static str {
     }
 
     try {
-      const dataTransfer = new DataTransfer();
-      let changed = false;
+      const originalFiles = Array.from(input.files);
+      const nativeResult = await sanitizeFilesWithNative(originalFiles).catch((error) => {
+        window.__WHATNULL_STATUS__.lastSanitize = {
+          at: new Date().toISOString(),
+          error: String(error && error.message ? error.message : error)
+        };
+        return null;
+      });
 
-      for (const file of Array.from(input.files)) {
-        const sanitized = await stripImageMetadataInBrowser(file);
+      const dataTransfer = new DataTransfer();
+      let changed = nativeResult ? nativeResult.changed : false;
+      const filesToUse = nativeResult ? nativeResult.files : originalFiles;
+
+      for (const file of filesToUse) {
+        const sanitized = nativeResult ? file : await stripImageMetadataInBrowser(file);
         if (sanitized !== file) changed = true;
         dataTransfer.items.add(sanitized);
       }
@@ -470,6 +645,7 @@ fn whatsapp_init_script() -> &'static str {
       if (changed) {
         input.dataset.whatnullSanitized = '1';
         input.files = dataTransfer.files;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
     } catch (_) {}
@@ -482,6 +658,7 @@ fn whatsapp_init_script() -> &'static str {
         video.playsInline = true;
         video.preload = 'metadata';
       });
+      window.__WHATNULL_STATUS__.inlineMediaEnhanced = document.querySelectorAll('video').length;
     } catch (_) {}
   }
 

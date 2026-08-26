@@ -12,7 +12,7 @@ All data, session profiles, configuration settings, and window states are stored
 
 - **Messages and Media**: We do not store or log any message bodies, media contents, or attachments on our side. Message rendering is handled entirely within the isolated webview of the official WhatsApp Web.
 - **Session Data**: WebView session data (session tokens, cookies, localStorage) is stored securely by the WebKit2GTK engine in isolated storage partitions.
-- **Log Files**: Application logs are stored locally for troubleshooting purposes and do not contain any private metadata, phone numbers, contact names, message bodies, or tokens.
+- **Log Files**: WhatNull does not currently write application logs. When local logging is added it will be opt-in, stored only on your device, and redacted before writing.
 
 ## Third-Party Services
 

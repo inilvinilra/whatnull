@@ -23,5 +23,5 @@ npm run typecheck
 To inspect style and security lints:
 ```bash
 npm run lint
-cargo clippy --all-targets --all-features -- -D warnings
+cargo clippy --workspace --all-targets --all-features -- -D warnings
 ```
