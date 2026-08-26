@@ -1,6 +1,8 @@
 fn main() {
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
+            "get_app_config",
+            "update_app_config",
             "quit_app",
             "get_app_version",
             "get_platform_info",

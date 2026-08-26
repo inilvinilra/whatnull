@@ -1,13 +1,17 @@
 {
   "identifier": "default",
   "description": "Default permissions for the privileged local shell webview",
-  "webviews": ["shell"],
+  "webviews": [
+    "shell"
+  ],
   "permissions": [
     "core:default",
     "core:event:default",
     "core:window:default",
     "core:webview:default",
     "core:tray:default",
+    "allow-get-app-config",
+    "allow-update-app-config",
     "allow-quit-app",
     "allow-get-app-version",
     "allow-get-platform-info",

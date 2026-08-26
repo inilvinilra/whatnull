@@ -1,7 +1,9 @@
 use crate::app::AppState;
 use crate::error::AppErrorWrapper;
 use tauri::{AppHandle, Manager, State};
-use whatnull_types::{AccountProfile, AppError};
+use whatnull_types::{
+    is_valid_avatar_color, is_valid_display_name, is_valid_profile_id, AccountProfile, AppError,
+};
 
 #[tauri::command]
 pub fn quit_app(app_handle: AppHandle) {
@@ -131,19 +133,21 @@ pub fn create_profile(
 ) -> Result<AccountProfile, AppErrorWrapper> {
     let core = &state.core;
     let display_name = name.trim();
-    if display_name.is_empty() || display_name.len() > 64 {
-        return Err(AppErrorWrapper::from(AppError::Account(
-            "Profile name must be between 1 and 64 characters".to_string(),
-        )));
+    if !is_valid_display_name(display_name) {
+        return Err(AppErrorWrapper::from(AppError::Account(format!(
+            "Profile name must be between 1 and {} characters",
+            whatnull_types::MAX_DISPLAY_NAME_LEN
+        ))));
     }
-    if !is_safe_avatar_color(&avatar_color) {
+    if !is_valid_avatar_color(&avatar_color) {
         return Err(AppErrorWrapper::from(AppError::Account(
             "Avatar color must be a hex RGB value".to_string(),
         )));
     }
 
     let now = unix_timestamp()?;
-    let new_id = format!("profile-{}", now);
+    let mut manager = core.config_manager.write().unwrap();
+    let new_id = allocate_profile_id(&manager.get().accounts.profiles, now);
     let profile = AccountProfile {
         id: new_id.clone(),
         display_name: display_name.to_string(),
@@ -154,13 +158,12 @@ pub fn create_profile(
     };
 
     let prof_clone = profile.clone();
-    core.config_manager
-        .write()
-        .unwrap()
+    manager
         .update(move |cfg| {
             cfg.accounts.profiles.push(prof_clone);
         })
         .map_err(AppErrorWrapper::from)?;
+    drop(manager);
 
     core.storage_manager
         .ensure_dirs(&new_id)
@@ -276,16 +279,20 @@ fn ensure_valid_profile_id(profile_id: &str) -> Result<(), AppErrorWrapper> {
     }
 }
 
-fn is_valid_profile_id(profile_id: &str) -> bool {
-    !profile_id.is_empty()
-        && profile_id.len() <= 80
-        && profile_id
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
-}
+fn allocate_profile_id(existing: &[AccountProfile], seed: u64) -> String {
+    let base = format!("profile-{}", seed);
+    if !existing.iter().any(|profile| profile.id == base) {
+        return base;
+    }
 
-fn is_safe_avatar_color(color: &str) -> bool {
-    color.len() == 7 && color.starts_with('#') && color[1..].bytes().all(|b| b.is_ascii_hexdigit())
+    let mut suffix: u32 = 2;
+    loop {
+        let candidate = format!("{}-{}", base, suffix);
+        if !existing.iter().any(|profile| profile.id == candidate) {
+            return candidate;
+        }
+        suffix += 1;
+    }
 }
 
 fn unix_timestamp() -> Result<u64, AppErrorWrapper> {

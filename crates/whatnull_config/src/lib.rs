@@ -1,8 +1,18 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
-use whatnull_types::{AccountProfile, AppError, CloseBehavior, NotificationPrivacy, Theme};
+use whatnull_types::{
+    is_valid_avatar_color, is_valid_display_name, is_valid_profile_id, AccountProfile, AppError,
+    CloseBehavior, NotificationPrivacy, Theme,
+};
+
+pub const CURRENT_SCHEMA_VERSION: u32 = 1;
+pub const MIN_ZOOM_LEVEL: f64 = 0.5;
+pub const MAX_ZOOM_LEVEL: f64 = 3.0;
+pub const MAX_LOCK_TIMEOUT_MINS: u32 = 1440;
+pub const MAX_LANGUAGE_LEN: usize = 16;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct AppConfig {
@@ -134,6 +144,116 @@ impl Default for AppConfig {
     }
 }
 
+impl AppConfig {
+    pub fn validate(&self) -> Result<(), AppError> {
+        if self.schema_version != CURRENT_SCHEMA_VERSION {
+            return Err(AppError::Config(format!(
+                "Unsupported schema version: {}",
+                self.schema_version
+            )));
+        }
+
+        if self.accounts.profiles.is_empty() {
+            return Err(AppError::Config(
+                "At least one account profile is required".to_string(),
+            ));
+        }
+
+        let mut seen_ids = HashSet::new();
+        for profile in &self.accounts.profiles {
+            if !is_valid_profile_id(&profile.id) {
+                return Err(AppError::Config(format!(
+                    "Invalid profile id: {}",
+                    profile.id
+                )));
+            }
+            if !seen_ids.insert(profile.id.as_str()) {
+                return Err(AppError::Config(format!(
+                    "Duplicate profile id: {}",
+                    profile.id
+                )));
+            }
+            if !is_valid_profile_id(&profile.storage_partition) {
+                return Err(AppError::Config(format!(
+                    "Invalid storage partition for profile {}",
+                    profile.id
+                )));
+            }
+            if !is_valid_display_name(&profile.display_name) {
+                return Err(AppError::Config(format!(
+                    "Profile name must be between 1 and {} characters",
+                    whatnull_types::MAX_DISPLAY_NAME_LEN
+                )));
+            }
+            if !is_valid_avatar_color(&profile.avatar_color) {
+                return Err(AppError::Config(format!(
+                    "Avatar color must be a hex RGB value for profile {}",
+                    profile.id
+                )));
+            }
+        }
+
+        if !seen_ids.contains(self.accounts.active_profile_id.as_str()) {
+            return Err(AppError::Config(format!(
+                "Active profile does not exist: {}",
+                self.accounts.active_profile_id
+            )));
+        }
+
+        let zoom = self.general.zoom_level;
+        if !zoom.is_finite() || !(MIN_ZOOM_LEVEL..=MAX_ZOOM_LEVEL).contains(&zoom) {
+            return Err(AppError::Config(format!(
+                "Zoom level must be between {} and {}",
+                MIN_ZOOM_LEVEL, MAX_ZOOM_LEVEL
+            )));
+        }
+
+        if self.privacy.lock_timeout_mins > MAX_LOCK_TIMEOUT_MINS {
+            return Err(AppError::Config(format!(
+                "Lock timeout must not exceed {} minutes",
+                MAX_LOCK_TIMEOUT_MINS
+            )));
+        }
+
+        let language = self.general.language.as_str();
+        if language.is_empty()
+            || language.len() > MAX_LANGUAGE_LEN
+            || !language
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+        {
+            return Err(AppError::Config(format!(
+                "Invalid language tag: {}",
+                language
+            )));
+        }
+
+        if let Some(directory) = &self.downloads.default_directory {
+            if !std::path::Path::new(directory).is_absolute() {
+                return Err(AppError::Config(
+                    "Download directory must be an absolute path".to_string(),
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn repair(&mut self) {
+        if self.accounts.profiles.is_empty() {
+            self.accounts = AccountsConfig::default();
+        }
+        if !self
+            .accounts
+            .profiles
+            .iter()
+            .any(|profile| profile.id == self.accounts.active_profile_id)
+        {
+            self.accounts.active_profile_id = self.accounts.profiles[0].id.clone();
+        }
+    }
+}
+
 pub struct ConfigManager {
     config_path: PathBuf,
     current_config: AppConfig,
@@ -162,7 +282,7 @@ impl ConfigManager {
             .and_then(|v| v.as_u64())
             .unwrap_or(0) as u32;
 
-        let migrated_config = if schema_version < 1 {
+        let mut migrated_config = if schema_version < 1 {
             return Err(AppError::Config(
                 "Unsupported config schema version".to_string(),
             ));
@@ -174,6 +294,9 @@ impl ConfigManager {
             serde_json::from_value::<AppConfig>(raw_val)
                 .map_err(|e| AppError::Config(format!("Invalid config structure: {}", e)))?
         };
+
+        migrated_config.repair();
+        migrated_config.validate()?;
 
         Ok(Self {
             config_path,
@@ -191,6 +314,7 @@ impl ConfigManager {
     {
         let mut new_config = self.current_config.clone();
         updater(&mut new_config);
+        new_config.validate()?;
         self.current_config = new_config;
         self.save()
     }
@@ -266,6 +390,89 @@ mod tests {
         let reloaded = ConfigManager::load(config_path.clone()).unwrap();
         assert_eq!(reloaded.get().general.language, "tr");
         assert!(reloaded.get().privacy.telemetry);
+
+        let _ = fs::remove_file(&config_path);
+    }
+
+    #[test]
+    fn validate_accepts_defaults() {
+        assert!(AppConfig::default().validate().is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_dangling_active_profile() {
+        let mut config = AppConfig::default();
+        config.accounts.active_profile_id = "does-not-exist".to_string();
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn validate_rejects_duplicate_profile_ids() {
+        let mut config = AppConfig::default();
+        let duplicate = config.accounts.profiles[0].clone();
+        config.accounts.profiles.push(duplicate);
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn validate_rejects_unsafe_profile_id() {
+        let mut config = AppConfig::default();
+        config.accounts.profiles[0].id = "../../etc".to_string();
+        config.accounts.active_profile_id = "../../etc".to_string();
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn validate_rejects_out_of_range_zoom() {
+        let mut config = AppConfig::default();
+        config.general.zoom_level = 42.0;
+        assert!(config.validate().is_err());
+        config.general.zoom_level = f64::NAN;
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn validate_rejects_relative_download_directory() {
+        let mut config = AppConfig::default();
+        config.downloads.default_directory = Some("relative/path".to_string());
+        assert!(config.validate().is_err());
+        config.downloads.default_directory = Some("/tmp/downloads".to_string());
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn repair_points_active_profile_at_an_existing_one() {
+        let mut config = AppConfig::default();
+        config.accounts.active_profile_id = "missing".to_string();
+        config.repair();
+        assert_eq!(config.accounts.active_profile_id, "default");
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn repair_restores_an_empty_profile_list() {
+        let mut config = AppConfig::default();
+        config.accounts.profiles.clear();
+        config.repair();
+        assert!(!config.accounts.profiles.is_empty());
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn update_refuses_to_persist_an_invalid_config() {
+        let config_path = std::env::temp_dir().join("whatnull_test_invalid_update.json");
+        let _ = fs::remove_file(&config_path);
+
+        let mut manager = ConfigManager::load(config_path.clone()).unwrap();
+        let result = manager.update(|cfg| {
+            cfg.accounts.active_profile_id = "ghost".to_string();
+        });
+
+        assert!(result.is_err());
+        assert_eq!(manager.get().accounts.active_profile_id, "default");
+
+        let reloaded = ConfigManager::load(config_path.clone()).unwrap();
+        assert_eq!(reloaded.get().accounts.active_profile_id, "default");
 
         let _ = fs::remove_file(&config_path);
     }

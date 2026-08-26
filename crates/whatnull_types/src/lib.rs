@@ -66,6 +66,26 @@ pub struct AccountProfile {
     pub last_used_at: u64,
 }
 
+pub const MAX_PROFILE_ID_LEN: usize = 80;
+pub const MAX_DISPLAY_NAME_LEN: usize = 64;
+
+pub fn is_valid_profile_id(profile_id: &str) -> bool {
+    !profile_id.is_empty()
+        && profile_id.len() <= MAX_PROFILE_ID_LEN
+        && profile_id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+}
+
+pub fn is_valid_display_name(name: &str) -> bool {
+    let trimmed = name.trim();
+    !trimmed.is_empty() && trimmed.chars().count() <= MAX_DISPLAY_NAME_LEN
+}
+
+pub fn is_valid_avatar_color(color: &str) -> bool {
+    color.len() == 7 && color.starts_with('#') && color[1..].bytes().all(|b| b.is_ascii_hexdigit())
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 pub enum CloseBehavior {
     Quit,
@@ -100,4 +120,42 @@ pub struct NotificationPayload {
 pub struct PrivacyState {
     pub is_blurred: bool,
     pub is_locked: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn profile_ids_accept_safe_characters_only() {
+        assert!(is_valid_profile_id("default"));
+        assert!(is_valid_profile_id("profile-1787774426"));
+        assert!(is_valid_profile_id("work_2"));
+        assert!(!is_valid_profile_id(""));
+        assert!(!is_valid_profile_id("../escape"));
+        assert!(!is_valid_profile_id("has space"));
+        assert!(!is_valid_profile_id("slash/inside"));
+        assert!(!is_valid_profile_id(&"a".repeat(MAX_PROFILE_ID_LEN + 1)));
+    }
+
+    #[test]
+    fn display_names_are_measured_in_characters_not_bytes() {
+        assert!(is_valid_display_name("İş"));
+        assert!(is_valid_display_name(&"ğ".repeat(MAX_DISPLAY_NAME_LEN)));
+        assert!(!is_valid_display_name(
+            &"ğ".repeat(MAX_DISPLAY_NAME_LEN + 1)
+        ));
+        assert!(!is_valid_display_name("   "));
+        assert!(!is_valid_display_name(""));
+    }
+
+    #[test]
+    fn avatar_colors_require_hex_rgb() {
+        assert!(is_valid_avatar_color("#10b981"));
+        assert!(is_valid_avatar_color("#ABCDEF"));
+        assert!(!is_valid_avatar_color("10b981"));
+        assert!(!is_valid_avatar_color("#10b98"));
+        assert!(!is_valid_avatar_color("#10b98g"));
+        assert!(!is_valid_avatar_color("red"));
+    }
 }
