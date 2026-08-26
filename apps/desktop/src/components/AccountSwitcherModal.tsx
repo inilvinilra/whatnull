@@ -1,16 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { Users, Plus, Check, Trash2, X } from 'lucide-react'
 import { useConfigStore } from '../stores/configStore'
-
-interface AccountProfile {
-  id: string
-  display_name: string
-  storage_partition: string
-  avatar_color: string
-  created_at: number
-  last_used_at: number
-}
 
 interface AccountSwitcherModalProps {
   onClose: () => void
@@ -18,60 +9,47 @@ interface AccountSwitcherModalProps {
 
 export const AccountSwitcherModal: React.FC<AccountSwitcherModalProps> = ({ onClose }) => {
   const { config, fetchConfig } = useConfigStore()
-  const [profiles, setProfiles] = useState<AccountProfile[]>([])
   const [newProfileName, setNewProfileName] = useState('')
   const [newProfileColor, setNewProfileColor] = useState('#10b981')
   const [isCreating, setIsCreating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const loadProfiles = async () => {
-    try {
-      const list = await invoke<AccountProfile[]>('list_profiles')
-      setProfiles(list)
-    } catch (e) {
-      console.error(e)
-    }
-  }
-
-  useEffect(() => {
-    // oxlint-disable-next-line react/set-state-in-effect
-    loadProfiles()
-  }, [])
+  const profiles = config?.accounts.profiles ?? []
 
   const handleSwitch = async (id: string) => {
+    setError(null)
     try {
       await invoke('switch_profile', { profileId: id })
       await fetchConfig()
       onClose()
     } catch (e) {
-      console.error(e)
+      setError(String(e))
     }
   }
 
   const handleCreate = async () => {
-    if (!newProfileName.trim()) return
+    const name = newProfileName.trim()
+    if (!name) return
+    setError(null)
     try {
-      await invoke('create_profile', {
-        name: newProfileName.trim(),
-        avatarColor: newProfileColor,
-      })
+      await invoke('create_profile', { name, avatarColor: newProfileColor })
       setNewProfileName('')
       setIsCreating(false)
-      await loadProfiles()
       await fetchConfig()
     } catch (e) {
-      console.error(e)
+      setError(String(e))
     }
   }
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
     if (profiles.length <= 1) return
+    setError(null)
     try {
       await invoke('delete_profile', { profileId: id })
-      await loadProfiles()
       await fetchConfig()
     } catch (err) {
-      console.error(err)
+      setError(String(err))
     }
   }
 
@@ -90,6 +68,23 @@ export const AccountSwitcherModal: React.FC<AccountSwitcherModalProps> = ({ onCl
               <X size={20} />
             </button>
           </div>
+
+          {error && (
+            <div
+              role="alert"
+              style={{
+                marginBottom: '16px',
+                padding: '10px 12px',
+                borderRadius: 'var(--radius-sm)',
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                color: '#ef4444',
+                fontSize: '13px',
+              }}
+            >
+              {error}
+            </div>
+          )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
             {profiles.map((p) => {

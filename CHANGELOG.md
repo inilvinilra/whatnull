@@ -3,12 +3,19 @@
 All notable changes to this project are documented in this file.
 
 ## [Unreleased]
+### Fixed
+- IPv6 addresses were never rejected by the navigation policy. `Url::host_str` returns IPv6 literals wrapped in brackets, so they never parsed as an IP and the entire IPv6 private-address branch was dead code. Host inspection now uses the parsed `url::Host`, and IPv4-mapped IPv6 addresses such as `::ffff:127.0.0.1` are covered too.
+- The account switcher now surfaces command errors instead of writing them to the console, so refusals like "Cannot delete the active profile" are visible.
+
 ### Added
 - Attachment metadata sanitization for the remote WhatsApp surface, backed by a new `sanitize_upload_files` command.
 - A dedicated, narrowly scoped capability granting that single command to the `whatsapp` webview.
 - Explicit Tauri app manifest listing every exposed command, so the generated ACL matches the invoke handler.
 
 ### Changed
+- Source comments are removed in favour of named constants and helper functions, matching the contribution rules. Marker and chunk magic numbers in the privacy crate are now named.
+- The account switcher derives its profile list from the config store instead of issuing a second `list_profiles` call and holding a duplicate copy in local state.
+- The JPEG stripping test asserted only that the call returned either variant. It now builds a JPEG carrying an EXIF segment and asserts the segment is gone and the JFIF segment survives.
 - Window bounds are now synchronized after restoring a saved window position.
 - Documentation now describes the implemented behaviour only. The security docs previously claimed the remote webview held no IPC capability, which stopped being true once upload sanitization landed. Known gaps are listed explicitly in `docs/SECURITY_MODEL.md` and `docs/WEBVIEW_SECURITY.md`.
 - `PRIVACY.md` no longer describes a log redaction pipeline. No application logging exists yet.

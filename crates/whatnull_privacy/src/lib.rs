@@ -1,13 +1,18 @@
-//! WhatNull Privacy Module — Metadata Stripping
-//!
-//! Strips EXIF, GPS, device info, and other metadata from files
-//! before they are shared via WhatsApp.
-
 use std::fs;
 use std::io::Cursor;
 use std::path::Path;
 
 use lopdf::{Document, Object};
+
+const JPEG_APP0_JFIF: u8 = 0xE0;
+const JPEG_APP1_EXIF_XMP: u8 = 0xE1;
+const JPEG_APP2_ICC: u8 = 0xE2;
+const JPEG_APP15: u8 = 0xEF;
+const JPEG_COMMENT: u8 = 0xFE;
+
+const EXIF_SEGMENT_PREFIX: &[u8] = b"Exif\x00";
+const XMP_SEGMENT_PREFIX: &[u8] = b"http://ns.adobe.com/xap/";
+const EXIF_GPS_IFD_TAG: [u8; 2] = [0x88, 0x25];
 
 #[derive(Debug, thiserror::Error)]
 pub enum MetadataError {
@@ -19,7 +24,6 @@ pub enum MetadataError {
     UnsupportedFileType(String),
 }
 
-/// Information about metadata found in a file
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct MetadataInfo {
     pub file_path: String,
@@ -30,7 +34,6 @@ pub struct MetadataInfo {
     pub fields_found: Vec<String>,
 }
 
-/// Result of a metadata stripping operation
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct StripResult {
     pub file_path: String,
@@ -40,7 +43,6 @@ pub struct StripResult {
     pub fields_removed: Vec<String>,
 }
 
-/// Detect file type from extension
 fn detect_file_type(path: &Path) -> Option<String> {
     path.extension().and_then(|ext| ext.to_str()).map(|ext| {
         let lower = ext.to_lowercase();
@@ -57,11 +59,6 @@ fn detect_file_type(path: &Path) -> Option<String> {
     })
 }
 
-/// Strip metadata from a JPEG file using img-parts
-///
-/// Removes all EXIF, IPTC, XMP, and ICC profile data segments.
-/// This eliminates GPS coordinates, camera model, timestamps,
-/// software info, and other personally identifiable metadata.
 pub fn strip_jpeg_metadata(path: &Path) -> Result<StripResult, MetadataError> {
     let original_bytes = fs::read(path)?;
     let original_size = original_bytes.len() as u64;
@@ -71,20 +68,14 @@ pub fn strip_jpeg_metadata(path: &Path) -> Result<StripResult, MetadataError> {
 
     let mut fields_removed = Vec::new();
 
-    // Remove all non-essential segments (EXIF, IPTC, XMP, ICC, comments)
     for segment in jpeg.segments_mut() {
         let marker = segment.marker();
-        // APP0 (JFIF) = 0xE0, keep it
-        // APP1 (EXIF/XMP) = 0xE1, remove
-        // APP2-APP15 = 0xE2-0xEF, remove (ICC, FlashPix, etc.)
-        // COM (Comment) = 0xFE, remove
         match marker {
-            0xE1 => {
-                // Check if it's EXIF or XMP
+            JPEG_APP1_EXIF_XMP => {
                 let bytes = segment.contents();
-                if bytes.starts_with(b"Exif\x00") {
+                if bytes.starts_with(EXIF_SEGMENT_PREFIX) {
                     fields_removed.push("EXIF (GPS, camera, timestamps)".to_string());
-                } else if bytes.starts_with(b"http://ns.adobe.com/xap/") {
+                } else if bytes.starts_with(XMP_SEGMENT_PREFIX) {
                     fields_removed.push("XMP (Adobe metadata)".to_string());
                 } else {
                     fields_removed.push("APP1 segment".to_string());
@@ -94,18 +85,18 @@ pub fn strip_jpeg_metadata(path: &Path) -> Result<StripResult, MetadataError> {
                     img_parts::Bytes::new(),
                 );
             }
-            0xE2..=0xEF => {
-                if marker == 0xE2 {
+            JPEG_APP2_ICC..=JPEG_APP15 => {
+                if marker == JPEG_APP2_ICC {
                     fields_removed.push("ICC Color Profile".to_string());
                 } else {
-                    fields_removed.push(format!("APP{} segment", marker - 0xE0));
+                    fields_removed.push(format!("APP{} segment", marker - JPEG_APP0_JFIF));
                 }
                 *segment = img_parts::jpeg::JpegSegment::new_with_contents(
                     marker,
                     img_parts::Bytes::new(),
                 );
             }
-            0xFE => {
+            JPEG_COMMENT => {
                 fields_removed.push("JPEG Comment".to_string());
                 *segment = img_parts::jpeg::JpegSegment::new_with_contents(
                     marker,
@@ -116,9 +107,8 @@ pub fn strip_jpeg_metadata(path: &Path) -> Result<StripResult, MetadataError> {
         }
     }
 
-    // Remove empty segments
     jpeg.segments_mut()
-        .retain(|seg| !seg.contents().is_empty() || seg.marker() < 0xE1);
+        .retain(|seg| !seg.contents().is_empty() || seg.marker() < JPEG_APP1_EXIF_XMP);
 
     let mut output = Vec::new();
     jpeg.encoder()
@@ -137,10 +127,6 @@ pub fn strip_jpeg_metadata(path: &Path) -> Result<StripResult, MetadataError> {
     })
 }
 
-/// Strip metadata from a PNG file
-///
-/// Removes tEXt, iTXt, zTXt, and eXIf chunks which may contain
-/// creation software, timestamps, GPS data, and author information.
 pub fn strip_png_metadata(path: &Path) -> Result<StripResult, MetadataError> {
     let original_bytes = fs::read(path)?;
     let original_size = original_bytes.len() as u64;
@@ -150,17 +136,7 @@ pub fn strip_png_metadata(path: &Path) -> Result<StripResult, MetadataError> {
 
     let mut fields_removed = Vec::new();
 
-    // PNG metadata chunks to strip
-    let metadata_chunk_types: &[&[u8; 4]] = &[
-        b"tEXt", // Textual data
-        b"iTXt", // International textual data
-        b"zTXt", // Compressed textual data
-        b"eXIf", // EXIF data
-        b"iCCP", // ICC color profile (optional privacy concern)
-        b"tIME", // Last modification time
-    ];
-
-    let chunks_before = png.chunks().len();
+    let metadata_chunk_types: &[&[u8; 4]] = &[b"tEXt", b"iTXt", b"zTXt", b"eXIf", b"iCCP", b"tIME"];
 
     for chunk in png.chunks() {
         let kind_bytes = chunk.kind();
@@ -179,8 +155,6 @@ pub fn strip_png_metadata(path: &Path) -> Result<StripResult, MetadataError> {
         !metadata_chunk_types.iter().any(|mt| kind == **mt)
     });
 
-    let _ = chunks_before; // suppress unused warning
-
     let mut output = Vec::new();
     png.encoder()
         .write_to(&mut Cursor::new(&mut output))
@@ -198,10 +172,6 @@ pub fn strip_png_metadata(path: &Path) -> Result<StripResult, MetadataError> {
     })
 }
 
-/// Strip metadata from any supported file type
-///
-/// Automatically detects the file type and applies the appropriate
-/// metadata stripping strategy.
 pub fn strip_metadata(path: &Path) -> Result<StripResult, MetadataError> {
     let file_type = detect_file_type(path)
         .ok_or_else(|| MetadataError::UnsupportedFileType("Unknown file extension".to_string()))?;
@@ -218,10 +188,6 @@ pub fn strip_metadata(path: &Path) -> Result<StripResult, MetadataError> {
     }
 }
 
-/// Strip metadata from a PDF file
-///
-/// Removes document info dictionary (Author, Creator, Producer,
-/// CreationDate, ModDate, Title, Subject, Keywords).
 pub fn strip_pdf_metadata(path: &Path) -> Result<StripResult, MetadataError> {
     let original_size = fs::metadata(path)?.len();
     let mut doc = Document::load(path)
@@ -310,10 +276,6 @@ pub fn strip_pdf_metadata(path: &Path) -> Result<StripResult, MetadataError> {
     })
 }
 
-/// Strip metadata from audio/video files using ffmpeg
-///
-/// Uses ffmpeg to remux the file without metadata streams.
-/// Requires ffmpeg to be installed on the system.
 pub fn strip_av_metadata(path: &Path) -> Result<StripResult, MetadataError> {
     let original_size = fs::metadata(path)?.len();
     let output_path = path.with_extension("stripped.tmp");
@@ -323,10 +285,10 @@ pub fn strip_av_metadata(path: &Path) -> Result<StripResult, MetadataError> {
             "-i",
             &path.to_string_lossy(),
             "-map_metadata",
-            "-1", // Strip all metadata
+            "-1",
             "-c",
-            "copy", // Copy streams without re-encoding
-            "-y",   // Overwrite output
+            "copy",
+            "-y",
             &output_path.to_string_lossy(),
         ])
         .stdout(std::process::Stdio::null())
@@ -362,7 +324,6 @@ pub fn strip_av_metadata(path: &Path) -> Result<StripResult, MetadataError> {
     }
 }
 
-/// Inspect a file and report what metadata it contains without modifying it
 pub fn inspect_metadata(path: &Path) -> Result<MetadataInfo, MetadataError> {
     let file_type = detect_file_type(path)
         .ok_or_else(|| MetadataError::UnsupportedFileType("Unknown extension".to_string()))?;
@@ -378,27 +339,27 @@ pub fn inspect_metadata(path: &Path) -> Result<MetadataInfo, MetadataError> {
             if let Ok(jpeg) = img_parts::jpeg::Jpeg::from_bytes(bytes.into()) {
                 for segment in jpeg.segments() {
                     match segment.marker() {
-                        0xE1 => {
+                        JPEG_APP1_EXIF_XMP => {
                             let contents = segment.contents();
                             metadata_size += contents.len();
-                            if contents.starts_with(b"Exif\x00") {
+                            if contents.starts_with(EXIF_SEGMENT_PREFIX) {
                                 has_exif = true;
                                 fields_found.push("EXIF data".to_string());
-                                // Check for GPS IFD marker
-                                if contents.windows(2).any(|w| w == [0x88, 0x25]) {
+                                if contents.windows(2).any(|w| w == EXIF_GPS_IFD_TAG) {
                                     has_gps = true;
                                     fields_found.push("GPS coordinates".to_string());
                                 }
                             }
-                            if contents.starts_with(b"http://ns.adobe.com/xap/") {
+                            if contents.starts_with(XMP_SEGMENT_PREFIX) {
                                 fields_found.push("XMP metadata".to_string());
                             }
                         }
-                        0xE2..=0xEF => {
+                        JPEG_APP2_ICC..=JPEG_APP15 => {
                             metadata_size += segment.contents().len();
-                            fields_found.push(format!("APP{} data", segment.marker() - 0xE0));
+                            fields_found
+                                .push(format!("APP{} data", segment.marker() - JPEG_APP0_JFIF));
                         }
-                        0xFE => {
+                        JPEG_COMMENT => {
                             metadata_size += segment.contents().len();
                             fields_found.push("Comment".to_string());
                         }
@@ -467,7 +428,6 @@ pub fn inspect_metadata(path: &Path) -> Result<MetadataInfo, MetadataError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
 
     #[test]
     fn test_detect_file_type() {
@@ -494,42 +454,58 @@ mod tests {
         assert_eq!(detect_file_type(Path::new("noext")), None);
     }
 
-    #[test]
-    fn test_strip_jpeg_metadata_minimal() {
-        // Create a minimal valid JPEG
-        let mut jpeg_data: Vec<u8> = Vec::new();
-        // SOI
-        jpeg_data.extend_from_slice(&[0xFF, 0xD8]);
-        // APP0 (JFIF) - keep this
-        jpeg_data.extend_from_slice(&[0xFF, 0xE0, 0x00, 0x10]);
-        jpeg_data.extend_from_slice(b"JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00");
-        // APP1 (fake EXIF) - should be removed
-        jpeg_data.extend_from_slice(&[0xFF, 0xE1, 0x00, 0x08]);
-        jpeg_data.extend_from_slice(b"Exif\x00\x00");
-        // SOF0
-        jpeg_data.extend_from_slice(&[
+    fn minimal_jpeg_with_exif() -> Vec<u8> {
+        let soi: &[u8] = &[0xFF, 0xD8];
+        let app0_jfif: &[u8] = &[
+            0xFF, 0xE0, 0x00, 0x10, b'J', b'F', b'I', b'F', 0x00, 0x01, 0x01, 0x00, 0x00, 0x01,
+            0x00, 0x01, 0x00, 0x00,
+        ];
+        let app1_exif: &[u8] = &[0xFF, 0xE1, 0x00, 0x08, b'E', b'x', b'i', b'f', 0x00, 0x00];
+        let sof0: &[u8] = &[
             0xFF, 0xC0, 0x00, 0x0B, 0x08, 0x00, 0x01, 0x00, 0x01, 0x01, 0x01, 0x11, 0x00,
-        ]);
-        // SOS + minimal scan data
-        jpeg_data.extend_from_slice(&[0xFF, 0xDA, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3F, 0x00]);
-        jpeg_data.push(0x00);
-        // EOI
-        jpeg_data.extend_from_slice(&[0xFF, 0xD9]);
+        ];
+        let sos: &[u8] = &[
+            0xFF, 0xDA, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3F, 0x00, 0x00,
+        ];
+        let eoi: &[u8] = &[0xFF, 0xD9];
 
-        let tmp_dir = std::env::temp_dir().join("whatnull_test");
-        let _ = fs::create_dir_all(&tmp_dir);
-        let test_file = tmp_dir.join("test_strip.jpg");
-        let mut file = fs::File::create(&test_file).unwrap();
-        file.write_all(&jpeg_data).unwrap();
-        drop(file);
+        let mut bytes = Vec::new();
+        for part in [soi, app0_jfif, app1_exif, sof0, sos, eoi] {
+            bytes.extend_from_slice(part);
+        }
+        bytes
+    }
 
-        let result = strip_jpeg_metadata(&test_file);
-        let _ = fs::remove_file(&test_file);
-        let _ = fs::remove_dir(&tmp_dir);
+    fn has_marker(bytes: &[u8], marker: u8) -> bool {
+        img_parts::jpeg::Jpeg::from_bytes(bytes.to_vec().into())
+            .unwrap()
+            .segments()
+            .iter()
+            .any(|segment| segment.marker() == marker)
+    }
 
-        // We just verify it doesn't panic; actual EXIF removal
-        // requires a properly structured EXIF block
-        assert!(result.is_ok() || result.is_err());
+    #[test]
+    fn strip_jpeg_metadata_removes_the_exif_segment_and_keeps_jfif() {
+        let source = minimal_jpeg_with_exif();
+        assert!(has_marker(&source, JPEG_APP1_EXIF_XMP));
+
+        let dir = std::env::temp_dir().join("whatnull_test_strip_jpeg");
+        let _ = fs::create_dir_all(&dir);
+        let file = dir.join("exif.jpg");
+        fs::write(&file, &source).unwrap();
+
+        let result = strip_jpeg_metadata(&file).unwrap();
+        let stripped = fs::read(&file).unwrap();
+
+        let _ = fs::remove_file(&file);
+        let _ = fs::remove_dir(&dir);
+
+        assert!(!has_marker(&stripped, JPEG_APP1_EXIF_XMP));
+        assert!(has_marker(&stripped, JPEG_APP0_JFIF));
+        assert!(result
+            .fields_removed
+            .iter()
+            .any(|field| field.contains("EXIF")));
     }
 
     #[test]
