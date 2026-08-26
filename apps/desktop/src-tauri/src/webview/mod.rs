@@ -22,7 +22,7 @@ impl WebViewManager {
     ) -> Result<WebviewWindow, AppError> {
         if let Some(existing) = app.get_webview_window("whatsapp_remote") {
             let _ = existing.show();
-            let _ = existing.focus();
+            let _ = existing.set_focus();
             return Ok(existing);
         }
 

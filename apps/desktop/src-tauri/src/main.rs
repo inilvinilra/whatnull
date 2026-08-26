@@ -2,7 +2,7 @@
 
 use std::fs;
 use std::sync::Mutex;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 mod app;
 mod config;
@@ -39,7 +39,7 @@ fn main() {
         if let Ok(guard) = MAIN_WINDOW.lock() {
             if let Some(ref window) = *guard {
                 let _ = window.show();
-                let _ = window.focus();
+                let _ = window.set_focus();
             }
         }
     }) {
@@ -127,9 +127,9 @@ fn main() {
             main_window.on_window_event(move |event| match event {
                 tauri::WindowEvent::Focused(focused) => {
                     let cfg = config_manager_clone.read().unwrap().get().clone();
-                    if !focused && cfg.privacy.blur_on_unfocus {
+                    if !*focused && cfg.privacy.blur_on_unfocus {
                         let _ = main_window_clone.emit("privacy_blur", true);
-                    } else if focused {
+                    } else if *focused {
                         let _ = main_window_clone.emit("privacy_blur", false);
                     }
                 }

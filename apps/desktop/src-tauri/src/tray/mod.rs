@@ -9,7 +9,7 @@ pub fn init_tray(app: &mut tauri::App) -> Result<(), tauri::Error> {
 
     let menu = Menu::with_items(app, &[&open_item, &hide_item, &quit_item])?;
 
-    let icon_bytes = include_bytes!("../icons/32x32.png");
+    let icon_bytes = include_bytes!("../../icons/32x32.png");
     let icon = tauri::image::Image::from_bytes(icon_bytes)?;
 
     let _tray = TrayIconBuilder::new()
@@ -19,7 +19,7 @@ pub fn init_tray(app: &mut tauri::App) -> Result<(), tauri::Error> {
             "open" => {
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.show();
-                    let _ = window.focus();
+                    let _ = window.set_focus();
                 }
             }
             "hide" => {
