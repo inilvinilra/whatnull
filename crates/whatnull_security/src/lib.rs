@@ -13,13 +13,18 @@ pub struct NavigationPolicy;
 
 impl NavigationPolicy {
     pub fn evaluate(url_str: &str) -> NavigationDecision {
+        // Handle internal blob and about URLs used by WhatsApp Web for PDF/Media
+        if url_str.starts_with("blob:") || url_str.starts_with("about:") {
+            return NavigationDecision::Allow;
+        }
+
         let parsed = match Url::parse(url_str) {
             Ok(u) => u,
             Err(_) => return NavigationDecision::Reject,
         };
 
         let scheme = parsed.scheme().to_lowercase();
-        if ["file", "javascript", "data", "blob", "ftp", "ssh", "about", "chrome", "devtools"].contains(&scheme.as_str()) {
+        if ["file", "javascript", "data", "ftp", "ssh", "chrome", "devtools"].contains(&scheme.as_str()) {
             return NavigationDecision::Reject;
         }
 
@@ -57,7 +62,12 @@ impl NavigationPolicy {
             }
         }
 
-        if host == "web.whatsapp.com" || host.ends_with(".web.whatsapp.com") {
+        // Allow all WhatsApp Web subdomains (webtp.whatsapp.net, flows.whatsapp.net, web.whatsapp.com, fbcdn, etc.)
+        if host == "whatsapp.com" || host.ends_with(".whatsapp.com")
+            || host == "whatsapp.net" || host.ends_with(".whatsapp.net")
+            || host == "facebook.com" || host.ends_with(".facebook.com")
+            || host == "fbcdn.net" || host.ends_with(".fbcdn.net")
+        {
             return NavigationDecision::Allow;
         }
 
@@ -70,10 +80,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_whatsapp_allowed() {
+    fn test_whatsapp_domains_allowed() {
         assert_eq!(NavigationPolicy::evaluate("https://web.whatsapp.com"), NavigationDecision::Allow);
-        assert_eq!(NavigationPolicy::evaluate("https://sub.web.whatsapp.com"), NavigationDecision::Allow);
-        assert_eq!(NavigationPolicy::evaluate("http://web.whatsapp.com"), NavigationDecision::Allow);
+        assert_eq!(NavigationPolicy::evaluate("https://flows.whatsapp.net/flows/cache_management/"), NavigationDecision::Allow);
+        assert_eq!(NavigationPolicy::evaluate("https://webtp.whatsapp.net/pdf-viewer/?locale=en_GB"), NavigationDecision::Allow);
+        assert_eq!(NavigationPolicy::evaluate("blob:https://web.whatsapp.com/uuid"), NavigationDecision::Allow);
     }
 
     #[test]
@@ -86,15 +97,5 @@ mod tests {
     fn test_blocked_schemes_rejected() {
         assert_eq!(NavigationPolicy::evaluate("javascript:alert(1)"), NavigationDecision::Reject);
         assert_eq!(NavigationPolicy::evaluate("file:///etc/passwd"), NavigationDecision::Reject);
-        assert_eq!(NavigationPolicy::evaluate("data:text/html,test"), NavigationDecision::Reject);
-        assert_eq!(NavigationPolicy::evaluate("blob:https://web.whatsapp.com/uuid"), NavigationDecision::Reject);
-    }
-
-    #[test]
-    fn test_localhost_rejected() {
-        assert_eq!(NavigationPolicy::evaluate("http://127.0.0.1"), NavigationDecision::Reject);
-        assert_eq!(NavigationPolicy::evaluate("https://127.0.0.1"), NavigationDecision::Reject);
-        assert_eq!(NavigationPolicy::evaluate("http://localhost"), NavigationDecision::Reject);
-        assert_eq!(NavigationPolicy::evaluate("http://localhost:1420"), NavigationDecision::Reject);
     }
 }

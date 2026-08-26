@@ -35,19 +35,19 @@ impl WebViewManager {
             AppError::WebView(format!("Invalid WhatsApp target URL: {}", e))
         })?;
 
-        let user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
+        let user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
 
         let inject_script = r###"
         (function() {
             if (window.__WHATNULL_INITIALIZED__) return;
             window.__WHATNULL_INITIALIZED__ = true;
 
-            // 1. DEVICE & CALLING SPOOFING (Activates WhatsApp Voice 📞 & Video 📹 Calls)
+            // 1. DEVICE & CALLING SPOOFING
             try {
-                const fakeUA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
+                const fakeUA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
                 Object.defineProperty(navigator, 'userAgent', { get: () => fakeUA, configurable: true });
                 Object.defineProperty(navigator, 'appVersion', { get: () => fakeUA, configurable: true });
-                Object.defineProperty(navigator, 'platform', { get: () => 'MacIntel', configurable: true });
+                Object.defineProperty(navigator, 'platform', { get: () => 'Linux x86_64', configurable: true });
                 Object.defineProperty(navigator, 'vendor', { get: () => 'Google Inc.', configurable: true });
                 Object.defineProperty(navigator, 'deviceMemory', { get: () => 8, configurable: true });
                 Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8, configurable: true });
