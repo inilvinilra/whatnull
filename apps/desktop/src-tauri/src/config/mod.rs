@@ -1,6 +1,6 @@
-use tauri::State;
 use crate::app::AppState;
 use crate::error::AppErrorWrapper;
+use tauri::State;
 use whatnull_config::AppConfig;
 
 #[tauri::command]

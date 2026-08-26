@@ -82,9 +82,8 @@ impl SecretStore for FileSecretStore {
         let mut json = if self.path.exists() {
             let content = fs::read_to_string(&self.path)
                 .map_err(|e| AppError::Storage(format!("Failed to read secrets file: {}", e)))?;
-            serde_json::from_str(&content).unwrap_or_else(|_| {
-                serde_json::Value::Object(serde_json::Map::new())
-            })
+            serde_json::from_str(&content)
+                .unwrap_or_else(|_| serde_json::Value::Object(serde_json::Map::new()))
         } else {
             serde_json::Value::Object(serde_json::Map::new())
         };
@@ -99,9 +98,8 @@ impl SecretStore for FileSecretStore {
         let serialized = serde_json::to_string_pretty(&json)
             .map_err(|e| AppError::Storage(format!("Failed to serialize secrets: {}", e)))?;
 
-        fs::write(&self.path, serialized).map_err(|e| {
-            AppError::Storage(format!("Failed to write secrets file: {}", e))
-        })?;
+        fs::write(&self.path, serialized)
+            .map_err(|e| AppError::Storage(format!("Failed to write secrets file: {}", e)))?;
 
         Ok(())
     }
@@ -122,9 +120,8 @@ impl SecretStore for FileSecretStore {
         let serialized = serde_json::to_string_pretty(&json)
             .map_err(|e| AppError::Storage(format!("Failed to serialize secrets: {}", e)))?;
 
-        fs::write(&self.path, serialized).map_err(|e| {
-            AppError::Storage(format!("Failed to write secrets file: {}", e))
-        })?;
+        fs::write(&self.path, serialized)
+            .map_err(|e| AppError::Storage(format!("Failed to write secrets file: {}", e)))?;
 
         Ok(())
     }

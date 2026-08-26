@@ -38,6 +38,14 @@ export interface AppConfig {
   }
   accounts: {
     active_profile_id: string
+    profiles: Array<{
+      id: string
+      display_name: string
+      storage_partition: string
+      avatar_color: string
+      created_at: number
+      last_used_at: number
+    }>
   }
   advanced: {
     hardware_acceleration: boolean

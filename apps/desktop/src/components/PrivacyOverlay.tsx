@@ -1,28 +1,16 @@
-import { useEffect, useState } from 'react'
-import { listen } from '@tauri-apps/api/event'
 import { Shield, Lock, EyeOff } from 'lucide-react'
 
 interface PrivacyOverlayProps {
   isLockedManual: boolean
+  isBlurredByFocus: boolean
   onUnlockManual: () => void
 }
 
 export const PrivacyOverlay: React.FC<PrivacyOverlayProps> = ({
   isLockedManual,
+  isBlurredByFocus,
   onUnlockManual,
 }) => {
-  const [isBlurredByFocus, setIsBlurredByFocus] = useState(false)
-
-  useEffect(() => {
-    const unlistenPromise = listen<boolean>('privacy_blur', (event) => {
-      setIsBlurredByFocus(event.payload)
-    })
-
-    return () => {
-      unlistenPromise.then((unlisten) => unlisten())
-    }
-  }, [])
-
   const active = isLockedManual || isBlurredByFocus
 
   if (!active) return null

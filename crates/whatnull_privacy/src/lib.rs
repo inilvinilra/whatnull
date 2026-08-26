@@ -7,6 +7,8 @@ use std::fs;
 use std::io::Cursor;
 use std::path::Path;
 
+use lopdf::{Document, Object};
+
 #[derive(Debug, thiserror::Error)]
 pub enum MetadataError {
     #[error("IO error: {0}")]
@@ -40,21 +42,19 @@ pub struct StripResult {
 
 /// Detect file type from extension
 fn detect_file_type(path: &Path) -> Option<String> {
-    path.extension()
-        .and_then(|ext| ext.to_str())
-        .map(|ext| {
-            let lower = ext.to_lowercase();
-            match lower.as_str() {
-                "jpg" | "jpeg" => "jpeg".to_string(),
-                "png" => "png".to_string(),
-                "webp" => "webp".to_string(),
-                "gif" => "gif".to_string(),
-                "pdf" => "pdf".to_string(),
-                "mp4" | "mov" | "avi" | "mkv" | "webm" => "video".to_string(),
-                "mp3" | "ogg" | "flac" | "wav" | "m4a" => "audio".to_string(),
-                _ => lower,
-            }
-        })
+    path.extension().and_then(|ext| ext.to_str()).map(|ext| {
+        let lower = ext.to_lowercase();
+        match lower.as_str() {
+            "jpg" | "jpeg" => "jpeg".to_string(),
+            "png" => "png".to_string(),
+            "webp" => "webp".to_string(),
+            "gif" => "gif".to_string(),
+            "pdf" => "pdf".to_string(),
+            "mp4" | "mov" | "avi" | "mkv" | "webm" => "video".to_string(),
+            "mp3" | "ogg" | "flac" | "wav" | "m4a" => "audio".to_string(),
+            _ => lower,
+        }
+    })
 }
 
 /// Strip metadata from a JPEG file using img-parts
@@ -117,7 +117,8 @@ pub fn strip_jpeg_metadata(path: &Path) -> Result<StripResult, MetadataError> {
     }
 
     // Remove empty segments
-    jpeg.segments_mut().retain(|seg| !seg.contents().is_empty() || seg.marker() < 0xE1);
+    jpeg.segments_mut()
+        .retain(|seg| !seg.contents().is_empty() || seg.marker() < 0xE1);
 
     let mut output = Vec::new();
     jpeg.encoder()
@@ -152,7 +153,7 @@ pub fn strip_png_metadata(path: &Path) -> Result<StripResult, MetadataError> {
     // PNG metadata chunks to strip
     let metadata_chunk_types: &[&[u8; 4]] = &[
         b"tEXt", // Textual data
-        b"iTXt", // International textual data  
+        b"iTXt", // International textual data
         b"zTXt", // Compressed textual data
         b"eXIf", // EXIF data
         b"iCCP", // ICC color profile (optional privacy concern)
@@ -222,32 +223,89 @@ pub fn strip_metadata(path: &Path) -> Result<StripResult, MetadataError> {
 /// Removes document info dictionary (Author, Creator, Producer,
 /// CreationDate, ModDate, Title, Subject, Keywords).
 pub fn strip_pdf_metadata(path: &Path) -> Result<StripResult, MetadataError> {
-    let original_bytes = fs::read(path)?;
-    let original_size = original_bytes.len() as u64;
-
-    // Simple PDF metadata removal: overwrite the /Info dictionary entries
-    // For a more robust solution, use the lopdf crate
-    let content = String::from_utf8_lossy(&original_bytes);
+    let original_size = fs::metadata(path)?.len();
+    let mut doc = Document::load(path)
+        .map_err(|e| MetadataError::ImageProcessing(format!("Failed to parse PDF: {}", e)))?;
     let mut fields_removed = Vec::new();
 
+    if doc.trailer.remove(b"Info").is_some() {
+        fields_removed.push("PDF trailer Info dictionary".to_string());
+    }
+
+    let mut metadata_refs = Vec::new();
     let metadata_keys = [
-        "/Author", "/Creator", "/Producer", "/CreationDate",
-        "/ModDate", "/Title", "/Subject", "/Keywords",
+        b"Author".as_slice(),
+        b"Creator".as_slice(),
+        b"Producer".as_slice(),
+        b"CreationDate".as_slice(),
+        b"ModDate".as_slice(),
+        b"Title".as_slice(),
+        b"Subject".as_slice(),
+        b"Keywords".as_slice(),
     ];
 
-    for key in &metadata_keys {
-        if content.contains(key) {
-            fields_removed.push(format!("PDF {}", key));
+    for object in doc.objects.values_mut() {
+        match object {
+            Object::Dictionary(dict) => {
+                if let Some(metadata) = dict.remove(b"Metadata") {
+                    if let Object::Reference(id) = metadata {
+                        metadata_refs.push(id);
+                    }
+                    fields_removed.push("PDF XMP Metadata reference".to_string());
+                }
+
+                for key in metadata_keys {
+                    if dict.remove(key).is_some() {
+                        fields_removed.push(format!("PDF {} field", String::from_utf8_lossy(key)));
+                    }
+                }
+            }
+            Object::Stream(stream) => {
+                if stream.dict.remove(b"Metadata").is_some() {
+                    fields_removed.push("PDF stream Metadata reference".to_string());
+                }
+
+                let is_metadata_stream = stream
+                    .dict
+                    .get(b"Type")
+                    .ok()
+                    .and_then(|value| value.as_name().ok())
+                    == Some(b"Metadata");
+
+                if is_metadata_stream {
+                    stream.content.clear();
+                    stream.dict.set("Length", 0);
+                    fields_removed.push("PDF XMP Metadata stream".to_string());
+                }
+
+                for key in metadata_keys {
+                    if stream.dict.remove(key).is_some() {
+                        fields_removed.push(format!("PDF {} field", String::from_utf8_lossy(key)));
+                    }
+                }
+            }
+            _ => {}
         }
     }
 
-    // For now, return info about what was found
-    // Full PDF rewriting requires lopdf (will be added in future iteration)
+    for id in metadata_refs {
+        if doc.objects.remove(&id).is_some() {
+            fields_removed.push("PDF referenced Metadata object".to_string());
+        }
+    }
+
+    let output_path = path.with_extension("stripped.tmp");
+    doc.compress();
+    doc.save(&output_path)
+        .map_err(|e| MetadataError::ImageProcessing(format!("Failed to write PDF: {}", e)))?;
+    let stripped_size = fs::metadata(&output_path)?.len();
+    fs::rename(&output_path, path)?;
+
     Ok(StripResult {
         file_path: path.to_string_lossy().to_string(),
         original_size,
-        stripped_size: original_size,
-        bytes_removed: 0,
+        stripped_size,
+        bytes_removed: original_size.saturating_sub(stripped_size),
         fields_removed,
     })
 }
@@ -265,10 +323,10 @@ pub fn strip_av_metadata(path: &Path) -> Result<StripResult, MetadataError> {
             "-i",
             &path.to_string_lossy(),
             "-map_metadata",
-            "-1",       // Strip all metadata
+            "-1", // Strip all metadata
             "-c",
-            "copy",     // Copy streams without re-encoding
-            "-y",       // Overwrite output
+            "copy", // Copy streams without re-encoding
+            "-y",   // Overwrite output
             &output_path.to_string_lossy(),
         ])
         .stdout(std::process::Stdio::null())
@@ -370,6 +428,27 @@ pub fn inspect_metadata(path: &Path) -> Result<MetadataInfo, MetadataError> {
                 }
             }
         }
+        "pdf" => {
+            let content = String::from_utf8_lossy(&bytes);
+            let metadata_keys = [
+                "/Author",
+                "/Creator",
+                "/Producer",
+                "/CreationDate",
+                "/ModDate",
+                "/Title",
+                "/Subject",
+                "/Keywords",
+                "/Metadata",
+            ];
+
+            for key in metadata_keys {
+                if content.contains(key) {
+                    metadata_size += key.len();
+                    fields_found.push(format!("PDF {}", key));
+                }
+            }
+        }
         _ => {
             fields_found.push("Metadata inspection not available for this type".to_string());
         }
@@ -392,11 +471,26 @@ mod tests {
 
     #[test]
     fn test_detect_file_type() {
-        assert_eq!(detect_file_type(Path::new("photo.jpg")).as_deref(), Some("jpeg"));
-        assert_eq!(detect_file_type(Path::new("photo.JPEG")).as_deref(), Some("jpeg"));
-        assert_eq!(detect_file_type(Path::new("image.png")).as_deref(), Some("png"));
-        assert_eq!(detect_file_type(Path::new("video.mp4")).as_deref(), Some("video"));
-        assert_eq!(detect_file_type(Path::new("doc.pdf")).as_deref(), Some("pdf"));
+        assert_eq!(
+            detect_file_type(Path::new("photo.jpg")).as_deref(),
+            Some("jpeg")
+        );
+        assert_eq!(
+            detect_file_type(Path::new("photo.JPEG")).as_deref(),
+            Some("jpeg")
+        );
+        assert_eq!(
+            detect_file_type(Path::new("image.png")).as_deref(),
+            Some("png")
+        );
+        assert_eq!(
+            detect_file_type(Path::new("video.mp4")).as_deref(),
+            Some("video")
+        );
+        assert_eq!(
+            detect_file_type(Path::new("doc.pdf")).as_deref(),
+            Some("pdf")
+        );
         assert_eq!(detect_file_type(Path::new("noext")), None);
     }
 
@@ -413,7 +507,9 @@ mod tests {
         jpeg_data.extend_from_slice(&[0xFF, 0xE1, 0x00, 0x08]);
         jpeg_data.extend_from_slice(b"Exif\x00\x00");
         // SOF0
-        jpeg_data.extend_from_slice(&[0xFF, 0xC0, 0x00, 0x0B, 0x08, 0x00, 0x01, 0x00, 0x01, 0x01, 0x01, 0x11, 0x00]);
+        jpeg_data.extend_from_slice(&[
+            0xFF, 0xC0, 0x00, 0x0B, 0x08, 0x00, 0x01, 0x00, 0x01, 0x01, 0x01, 0x11, 0x00,
+        ]);
         // SOS + minimal scan data
         jpeg_data.extend_from_slice(&[0xFF, 0xDA, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3F, 0x00]);
         jpeg_data.push(0x00);

@@ -33,6 +33,7 @@ export const AccountSwitcherModal: React.FC<AccountSwitcherModalProps> = ({ onCl
   }
 
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect
     loadProfiles()
   }, [])
 

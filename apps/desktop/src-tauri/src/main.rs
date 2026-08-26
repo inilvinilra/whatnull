@@ -2,26 +2,26 @@
 
 use std::fs;
 use std::sync::Mutex;
-use tauri::{Emitter, Manager};
+use tauri::Emitter;
 
+mod account;
 mod app;
 mod config;
 mod error;
 mod events;
 mod ipc;
+mod notification;
 mod platform;
 mod privacy;
-mod session;
-mod account;
-mod notification;
 mod security;
+mod session;
 mod storage;
 mod tray;
 mod update;
 mod webview;
 mod window;
 
-static MAIN_WINDOW: Mutex<Option<tauri::WebviewWindow>> = Mutex::new(None);
+static MAIN_WINDOW: Mutex<Option<tauri::Window>> = Mutex::new(None);
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 struct WindowBounds {
@@ -79,6 +79,7 @@ fn main() {
             crate::ipc::set_startup_enabled,
             crate::ipc::reload_whatsapp,
             crate::ipc::hard_reload_whatsapp,
+            crate::ipc::set_whatsapp_visible,
             crate::ipc::reset_session,
             crate::ipc::list_profiles,
             crate::ipc::create_profile,
@@ -89,13 +90,23 @@ fn main() {
             crate::privacy::inspect_file_metadata,
         ])
         .setup(move |app| {
-            let active_pid = config_manager.read().unwrap().get().accounts.active_profile_id.clone();
+            let active_pid = config_manager
+                .read()
+                .unwrap()
+                .get()
+                .accounts
+                .active_profile_id
+                .clone();
             let profile_data_dir = storage_manager.get_profile_data_dir(&active_pid);
             let _ = storage_manager.ensure_dirs(&active_pid);
 
             let main_window = webview_manager
-                .create_whatsapp_webview(app.handle(), profile_data_dir)
-                .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) as Box<dyn std::error::Error>)?;
+                .create_single_window_shell(app.handle(), profile_data_dir)
+                .map_err(|e| {
+                    Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>
+                })?;
+
+            let _ = webview_manager.set_whatsapp_visible(false);
 
             *MAIN_WINDOW.lock().unwrap() = Some(main_window.clone());
 
@@ -107,10 +118,9 @@ fn main() {
             if config.general.remember_window_position && state_file.exists() {
                 if let Ok(content) = fs::read_to_string(&state_file) {
                     if let Ok(bounds) = serde_json::from_str::<WindowBounds>(&content) {
-                        let _ = main_window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(
-                            bounds.width,
-                            bounds.height,
-                        )));
+                        let _ = main_window.set_size(tauri::Size::Logical(
+                            tauri::LogicalSize::new(bounds.width, bounds.height),
+                        ));
                         let _ = main_window.set_position(tauri::Position::Logical(
                             tauri::LogicalPosition::new(bounds.x, bounds.y),
                         ));
@@ -124,8 +134,12 @@ fn main() {
             let main_window_clone = main_window.clone();
             let state_file_clone = state_file.clone();
             let config_manager_clone = config_manager.clone();
+            let webview_manager_clone = webview_manager.clone();
 
             main_window.on_window_event(move |event| match event {
+                tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. } => {
+                    let _ = webview_manager_clone.sync_whatsapp_bounds(&main_window_clone);
+                }
                 tauri::WindowEvent::Focused(focused) => {
                     let cfg = config_manager_clone.read().unwrap().get().clone();
                     if !*focused && cfg.privacy.blur_on_unfocus {
@@ -154,7 +168,8 @@ fn main() {
                                 if let Ok(physical_pos) = main_window_clone.outer_position() {
                                     let logical_size = physical_size.to_logical(factor);
                                     let logical_pos = physical_pos.to_logical(factor);
-                                    let maximized = main_window_clone.is_maximized().unwrap_or(false);
+                                    let maximized =
+                                        main_window_clone.is_maximized().unwrap_or(false);
 
                                     let bounds = WindowBounds {
                                         width: logical_size.width,

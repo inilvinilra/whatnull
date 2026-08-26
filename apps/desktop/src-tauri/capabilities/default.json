@@ -1,7 +1,7 @@
 {
   "identifier": "default",
-  "description": "Default permissions for WhatNull main window",
-  "windows": ["main"],
+  "description": "Default permissions for the privileged local shell webview",
+  "webviews": ["shell"],
   "permissions": [
     "core:default",
     "core:event:default",

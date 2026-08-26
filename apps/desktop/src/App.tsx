@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import { Sidebar } from './components/Sidebar'
 import { SettingsModal } from './components/SettingsModal'
 import { AccountSwitcherModal } from './components/AccountSwitcherModal'
@@ -13,9 +15,20 @@ export function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isAccountSwitcherOpen, setIsAccountSwitcherOpen] = useState(false)
   const [isManualLocked, setIsManualLocked] = useState(false)
+  const [isBlurredByFocus, setIsBlurredByFocus] = useState(false)
 
   useEffect(() => {
     fetchConfig()
+  }, [fetchConfig])
+
+  useEffect(() => {
+    const unlistenPromise = listen<boolean>('privacy_blur', (event) => {
+      setIsBlurredByFocus(event.payload)
+    })
+
+    return () => {
+      unlistenPromise.then((unlisten) => unlisten())
+    }
   }, [])
 
   useEffect(() => {
@@ -29,10 +42,28 @@ export function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
+  useEffect(() => {
+    const visible =
+      onboardingCompleted &&
+      !isSettingsOpen &&
+      !isAccountSwitcherOpen &&
+      !isManualLocked &&
+      !isBlurredByFocus
+
+    invoke('set_whatsapp_visible', { visible }).catch(() => {})
+  }, [
+    onboardingCompleted,
+    isSettingsOpen,
+    isAccountSwitcherOpen,
+    isManualLocked,
+    isBlurredByFocus,
+  ])
+
   return (
     <div className="app-container">
       <PrivacyOverlay
         isLockedManual={isManualLocked}
+        isBlurredByFocus={isBlurredByFocus}
         onUnlockManual={() => setIsManualLocked(false)}
       />
 

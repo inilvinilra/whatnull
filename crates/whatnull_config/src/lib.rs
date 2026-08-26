@@ -124,9 +124,7 @@ impl Default for AppConfig {
                 ask_every_time: true,
                 default_directory: None,
             },
-            startup: StartupConfig {
-                autostart: false,
-            },
+            startup: StartupConfig { autostart: false },
             accounts: AccountsConfig::default(),
             advanced: AdvancedConfig {
                 hardware_acceleration: true,
@@ -165,9 +163,13 @@ impl ConfigManager {
             .unwrap_or(0) as u32;
 
         let migrated_config = if schema_version < 1 {
-            return Err(AppError::Config("Unsupported config schema version".to_string()));
+            return Err(AppError::Config(
+                "Unsupported config schema version".to_string(),
+            ));
         } else if schema_version > 1 {
-            return Err(AppError::Config("Config schema version is from a newer app version".to_string()));
+            return Err(AppError::Config(
+                "Config schema version is from a newer app version".to_string(),
+            ));
         } else {
             serde_json::from_value::<AppConfig>(raw_val)
                 .map_err(|e| AppError::Config(format!("Invalid config structure: {}", e)))?
@@ -208,8 +210,9 @@ impl ConfigManager {
             .map_err(|e| AppError::Config(format!("Failed to serialize config: {}", e)))?;
 
         {
-            let mut temp_file = fs::File::create(&temp_path)
-                .map_err(|e| AppError::Config(format!("Failed to create temp config file: {}", e)))?;
+            let mut temp_file = fs::File::create(&temp_path).map_err(|e| {
+                AppError::Config(format!("Failed to create temp config file: {}", e))
+            })?;
 
             temp_file
                 .write_all(serialized.as_bytes())
@@ -220,8 +223,9 @@ impl ConfigManager {
                 .map_err(|e| AppError::Config(format!("Failed to sync config to disk: {}", e)))?;
         }
 
-        fs::rename(&temp_path, &self.config_path)
-            .map_err(|e| AppError::Config(format!("Failed to atomically rename config file: {}", e)))?;
+        fs::rename(&temp_path, &self.config_path).map_err(|e| {
+            AppError::Config(format!("Failed to atomically rename config file: {}", e))
+        })?;
 
         Ok(())
     }
@@ -235,9 +239,9 @@ mod tests {
     fn test_config_defaults() {
         let config = AppConfig::default();
         assert_eq!(config.schema_version, 1);
-        assert_eq!(config.privacy.telemetry, false);
-        assert_eq!(config.privacy.analytics, false);
-        assert_eq!(config.privacy.crash_upload, false);
+        assert!(!config.privacy.telemetry);
+        assert!(!config.privacy.analytics);
+        assert!(!config.privacy.crash_upload);
         assert_eq!(config.general.close_behavior, CloseBehavior::HideToTray);
     }
 
@@ -250,16 +254,18 @@ mod tests {
         }
 
         let mut manager = ConfigManager::load(config_path.clone()).unwrap();
-        assert_eq!(manager.get().privacy.telemetry, false);
+        assert!(!manager.get().privacy.telemetry);
 
-        manager.update(|cfg| {
-            cfg.general.language = "tr".to_string();
-            cfg.privacy.telemetry = true;
-        }).unwrap();
+        manager
+            .update(|cfg| {
+                cfg.general.language = "tr".to_string();
+                cfg.privacy.telemetry = true;
+            })
+            .unwrap();
 
         let reloaded = ConfigManager::load(config_path.clone()).unwrap();
         assert_eq!(reloaded.get().general.language, "tr");
-        assert_eq!(reloaded.get().privacy.telemetry, true);
+        assert!(reloaded.get().privacy.telemetry);
 
         let _ = fs::remove_file(&config_path);
     }

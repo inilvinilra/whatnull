@@ -24,7 +24,17 @@ impl NavigationPolicy {
         };
 
         let scheme = parsed.scheme().to_lowercase();
-        if ["file", "javascript", "data", "ftp", "ssh", "chrome", "devtools"].contains(&scheme.as_str()) {
+        if [
+            "file",
+            "javascript",
+            "data",
+            "ftp",
+            "ssh",
+            "chrome",
+            "devtools",
+        ]
+        .contains(&scheme.as_str())
+        {
             return NavigationDecision::Reject;
         }
 
@@ -63,10 +73,14 @@ impl NavigationPolicy {
         }
 
         // Allow all WhatsApp Web subdomains (webtp.whatsapp.net, flows.whatsapp.net, web.whatsapp.com, fbcdn, etc.)
-        if host == "whatsapp.com" || host.ends_with(".whatsapp.com")
-            || host == "whatsapp.net" || host.ends_with(".whatsapp.net")
-            || host == "facebook.com" || host.ends_with(".facebook.com")
-            || host == "fbcdn.net" || host.ends_with(".fbcdn.net")
+        if host == "whatsapp.com"
+            || host.ends_with(".whatsapp.com")
+            || host == "whatsapp.net"
+            || host.ends_with(".whatsapp.net")
+            || host == "facebook.com"
+            || host.ends_with(".facebook.com")
+            || host == "fbcdn.net"
+            || host.ends_with(".fbcdn.net")
         {
             return NavigationDecision::Allow;
         }
@@ -81,21 +95,45 @@ mod tests {
 
     #[test]
     fn test_whatsapp_domains_allowed() {
-        assert_eq!(NavigationPolicy::evaluate("https://web.whatsapp.com"), NavigationDecision::Allow);
-        assert_eq!(NavigationPolicy::evaluate("https://flows.whatsapp.net/flows/cache_management/"), NavigationDecision::Allow);
-        assert_eq!(NavigationPolicy::evaluate("https://webtp.whatsapp.net/pdf-viewer/?locale=en_GB"), NavigationDecision::Allow);
-        assert_eq!(NavigationPolicy::evaluate("blob:https://web.whatsapp.com/uuid"), NavigationDecision::Allow);
+        assert_eq!(
+            NavigationPolicy::evaluate("https://web.whatsapp.com"),
+            NavigationDecision::Allow
+        );
+        assert_eq!(
+            NavigationPolicy::evaluate("https://flows.whatsapp.net/flows/cache_management/"),
+            NavigationDecision::Allow
+        );
+        assert_eq!(
+            NavigationPolicy::evaluate("https://webtp.whatsapp.net/pdf-viewer/?locale=en_GB"),
+            NavigationDecision::Allow
+        );
+        assert_eq!(
+            NavigationPolicy::evaluate("blob:https://web.whatsapp.com/uuid"),
+            NavigationDecision::Allow
+        );
     }
 
     #[test]
     fn test_external_opened_externally() {
-        assert_eq!(NavigationPolicy::evaluate("https://example.com"), NavigationDecision::OpenExternally);
-        assert_eq!(NavigationPolicy::evaluate("https://google.com/search?q=test"), NavigationDecision::OpenExternally);
+        assert_eq!(
+            NavigationPolicy::evaluate("https://example.com"),
+            NavigationDecision::OpenExternally
+        );
+        assert_eq!(
+            NavigationPolicy::evaluate("https://google.com/search?q=test"),
+            NavigationDecision::OpenExternally
+        );
     }
 
     #[test]
     fn test_blocked_schemes_rejected() {
-        assert_eq!(NavigationPolicy::evaluate("javascript:alert(1)"), NavigationDecision::Reject);
-        assert_eq!(NavigationPolicy::evaluate("file:///etc/passwd"), NavigationDecision::Reject);
+        assert_eq!(
+            NavigationPolicy::evaluate("javascript:alert(1)"),
+            NavigationDecision::Reject
+        );
+        assert_eq!(
+            NavigationPolicy::evaluate("file:///etc/passwd"),
+            NavigationDecision::Reject
+        );
     }
 }

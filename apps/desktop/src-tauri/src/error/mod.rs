@@ -1,7 +1,5 @@
 use whatnull_types::AppError;
 
-pub type Result<T> = std::result::Result<T, AppErrorWrapper>;
-
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct AppErrorWrapper(pub AppError);
 

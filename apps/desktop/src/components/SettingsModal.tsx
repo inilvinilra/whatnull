@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useConfigStore } from '../stores/configStore'
-import { Shield, Settings, Bell, Zap, Play, X, RefreshCw, RotateCcw, Trash2 } from 'lucide-react'
+import { Bell, Play, RefreshCw, RotateCcw, Settings, Shield, Trash2, X, Zap } from 'lucide-react'
 import { invoke } from '@tauri-apps/api/core'
+import type { AppConfig } from '../stores/configStore'
 
 interface SettingsModalProps {
   onClose: () => void
@@ -13,7 +14,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
 
   useEffect(() => {
     fetchConfig()
-  }, [])
+  }, [fetchConfig])
+
+  const handleStartupChange = async (enabled: boolean) => {
+    try {
+      await invoke('set_startup_enabled', { enabled })
+      await fetchConfig()
+    } catch (e) {
+      console.error(e)
+    }
+  }
 
   const handleReload = async () => {
     try {
@@ -101,7 +111,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                   value={config.general.close_behavior}
                   onChange={(e) =>
                     updateConfig((cfg) => {
-                      cfg.general.close_behavior = e.target.value as any
+                      cfg.general.close_behavior = e.target.value as AppConfig['general']['close_behavior']
                     })
                   }
                 >
@@ -170,7 +180,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                   value={config.notifications.privacy}
                   onChange={(e) =>
                     updateConfig((cfg) => {
-                      cfg.notifications.privacy = e.target.value as any
+                      cfg.notifications.privacy = e.target.value as AppConfig['notifications']['privacy']
                     })
                   }
                   disabled={!config.notifications.enabled}
@@ -235,11 +245,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                     type="checkbox"
                     className="form-checkbox"
                     checked={config.startup.autostart}
-                    onChange={(e) =>
-                      updateConfig((cfg) => {
-                        cfg.startup.autostart = e.target.checked
-                      })
-                    }
+                    onChange={(e) => handleStartupChange(e.target.checked)}
                   />
                   <span className="form-label">Launch WhatNull on system startup</span>
                 </label>

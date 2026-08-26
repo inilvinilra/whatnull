@@ -1,6 +1,6 @@
+use crate::webview::WebViewManager;
 use std::sync::Arc;
 use whatnull_core::AppCore;
-use crate::webview::WebViewManager;
 
 pub struct AppState {
     pub core: Arc<AppCore>,

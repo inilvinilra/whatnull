@@ -1,7 +1,7 @@
-use tauri::{AppHandle, State};
-use whatnull_types::AccountProfile;
 use crate::app::AppState;
 use crate::error::AppErrorWrapper;
+use tauri::{AppHandle, State};
+use whatnull_types::{AccountProfile, AppError};
 
 #[tauri::command]
 pub fn quit_app(app_handle: AppHandle) {
@@ -31,6 +31,11 @@ pub fn set_startup_enabled(
     enabled: bool,
 ) -> Result<(), AppErrorWrapper> {
     let core = &state.core;
+    let autostart = whatnull_platform::AutostartManager::new().map_err(AppErrorWrapper::from)?;
+    autostart
+        .set_enabled(enabled)
+        .map_err(AppErrorWrapper::from)?;
+
     core.config_manager
         .write()
         .unwrap()
@@ -42,12 +47,29 @@ pub fn set_startup_enabled(
 
 #[tauri::command]
 pub fn reload_whatsapp(state: State<'_, AppState>) -> Result<(), AppErrorWrapper> {
-    state.webview_manager.reload().map_err(AppErrorWrapper::from)
+    state
+        .webview_manager
+        .reload()
+        .map_err(AppErrorWrapper::from)
 }
 
 #[tauri::command]
 pub fn hard_reload_whatsapp(state: State<'_, AppState>) -> Result<(), AppErrorWrapper> {
-    state.webview_manager.hard_reload().map_err(AppErrorWrapper::from)
+    state
+        .webview_manager
+        .hard_reload()
+        .map_err(AppErrorWrapper::from)
+}
+
+#[tauri::command]
+pub fn set_whatsapp_visible(
+    state: State<'_, AppState>,
+    visible: bool,
+) -> Result<(), AppErrorWrapper> {
+    state
+        .webview_manager
+        .set_whatsapp_visible(visible)
+        .map_err(AppErrorWrapper::from)
 }
 
 #[tauri::command]
@@ -55,18 +77,25 @@ pub fn reset_session(state: State<'_, AppState>) -> Result<(), AppErrorWrapper> 
     let core = &state.core;
     let config = core.config_manager.read().unwrap().get().clone();
     let profile_id = &config.accounts.active_profile_id;
+    ensure_valid_profile_id(profile_id)?;
+
     let data_dir = core.storage_manager.get_profile_data_dir(profile_id);
     let cache_dir = core.storage_manager.get_profile_cache_dir(profile_id);
 
     if data_dir.exists() {
-        let _ = std::fs::remove_dir_all(data_dir);
+        std::fs::remove_dir_all(data_dir).map_err(AppErrorWrapper::from)?;
     }
     if cache_dir.exists() {
-        let _ = std::fs::remove_dir_all(cache_dir);
+        std::fs::remove_dir_all(cache_dir).map_err(AppErrorWrapper::from)?;
     }
 
-    let _ = core.storage_manager.ensure_dirs(profile_id);
-    let _ = state.webview_manager.hard_reload();
+    core.storage_manager
+        .ensure_dirs(profile_id)
+        .map_err(AppErrorWrapper::from)?;
+    state
+        .webview_manager
+        .hard_reload()
+        .map_err(AppErrorWrapper::from)?;
 
     Ok(())
 }
@@ -85,11 +114,23 @@ pub fn create_profile(
     avatar_color: String,
 ) -> Result<AccountProfile, AppErrorWrapper> {
     let core = &state.core;
-    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+    let display_name = name.trim();
+    if display_name.is_empty() || display_name.len() > 64 {
+        return Err(AppErrorWrapper::from(AppError::Account(
+            "Profile name must be between 1 and 64 characters".to_string(),
+        )));
+    }
+    if !is_safe_avatar_color(&avatar_color) {
+        return Err(AppErrorWrapper::from(AppError::Account(
+            "Avatar color must be a hex RGB value".to_string(),
+        )));
+    }
+
+    let now = unix_timestamp()?;
     let new_id = format!("profile-{}", now);
     let profile = AccountProfile {
         id: new_id.clone(),
-        display_name: name,
+        display_name: display_name.to_string(),
         storage_partition: new_id.clone(),
         avatar_color,
         created_at: now,
@@ -105,7 +146,9 @@ pub fn create_profile(
         })
         .map_err(AppErrorWrapper::from)?;
 
-    let _ = core.storage_manager.ensure_dirs(&new_id);
+    core.storage_manager
+        .ensure_dirs(&new_id)
+        .map_err(AppErrorWrapper::from)?;
     Ok(profile)
 }
 
@@ -116,18 +159,50 @@ pub fn switch_profile(
     profile_id: String,
 ) -> Result<(), AppErrorWrapper> {
     let core = &state.core;
+    ensure_valid_profile_id(&profile_id)?;
+
+    let exists = core
+        .config_manager
+        .read()
+        .unwrap()
+        .get()
+        .accounts
+        .profiles
+        .iter()
+        .any(|profile| profile.id == profile_id);
+    if !exists {
+        return Err(AppErrorWrapper::from(AppError::Account(format!(
+            "Profile not found: {}",
+            profile_id
+        ))));
+    }
+
     let pid_clone = profile_id.clone();
+    let now = unix_timestamp()?;
     core.config_manager
         .write()
         .unwrap()
         .update(move |cfg| {
-            cfg.accounts.active_profile_id = pid_clone;
+            cfg.accounts.active_profile_id = pid_clone.clone();
+            if let Some(profile) = cfg
+                .accounts
+                .profiles
+                .iter_mut()
+                .find(|profile| profile.id == pid_clone)
+            {
+                profile.last_used_at = now;
+            }
         })
         .map_err(AppErrorWrapper::from)?;
 
     let data_dir = core.storage_manager.get_profile_data_dir(&profile_id);
-    let _ = core.storage_manager.ensure_dirs(&profile_id);
-    let _ = state.webview_manager.switch_account_webview(&app_handle, data_dir);
+    core.storage_manager
+        .ensure_dirs(&profile_id)
+        .map_err(AppErrorWrapper::from)?;
+    state
+        .webview_manager
+        .switch_account_webview(&app_handle, data_dir)
+        .map_err(AppErrorWrapper::from)?;
 
     Ok(())
 }
@@ -138,6 +213,20 @@ pub fn delete_profile(
     profile_id: String,
 ) -> Result<(), AppErrorWrapper> {
     let core = &state.core;
+    ensure_valid_profile_id(&profile_id)?;
+
+    let config = core.config_manager.read().unwrap().get().clone();
+    if config.accounts.active_profile_id == profile_id {
+        return Err(AppErrorWrapper::from(AppError::Account(
+            "Cannot delete the active profile".to_string(),
+        )));
+    }
+    if config.accounts.profiles.len() <= 1 {
+        return Err(AppErrorWrapper::from(AppError::Account(
+            "Cannot delete the last profile".to_string(),
+        )));
+    }
+
     let pid_clone = profile_id.clone();
 
     core.config_manager
@@ -152,11 +241,40 @@ pub fn delete_profile(
     let cache_dir = core.storage_manager.get_profile_cache_dir(&profile_id);
 
     if data_dir.exists() {
-        let _ = std::fs::remove_dir_all(data_dir);
+        std::fs::remove_dir_all(data_dir).map_err(AppErrorWrapper::from)?;
     }
     if cache_dir.exists() {
-        let _ = std::fs::remove_dir_all(cache_dir);
+        std::fs::remove_dir_all(cache_dir).map_err(AppErrorWrapper::from)?;
     }
 
     Ok(())
+}
+
+fn ensure_valid_profile_id(profile_id: &str) -> Result<(), AppErrorWrapper> {
+    if is_valid_profile_id(profile_id) {
+        Ok(())
+    } else {
+        Err(AppErrorWrapper::from(AppError::Account(
+            "Invalid profile id".to_string(),
+        )))
+    }
+}
+
+fn is_valid_profile_id(profile_id: &str) -> bool {
+    !profile_id.is_empty()
+        && profile_id.len() <= 80
+        && profile_id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+}
+
+fn is_safe_avatar_color(color: &str) -> bool {
+    color.len() == 7 && color.starts_with('#') && color[1..].bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+fn unix_timestamp() -> Result<u64, AppErrorWrapper> {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .map_err(|e| AppErrorWrapper::from(AppError::Internal(e.to_string())))
 }

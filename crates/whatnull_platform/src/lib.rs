@@ -15,9 +15,8 @@ pub struct XdgPaths {
 
 impl XdgPaths {
     pub fn resolve() -> Result<Self, AppError> {
-        let home = env::var("HOME").map_err(|_| {
-            AppError::Platform("HOME environment variable not set".to_string())
-        })?;
+        let home = env::var("HOME")
+            .map_err(|_| AppError::Platform("HOME environment variable not set".to_string()))?;
         let home_path = Path::new(&home);
 
         let config_dir = env::var("XDG_CONFIG_HOME")
@@ -63,9 +62,7 @@ impl XdgPaths {
                     let parts: Vec<&str> = trimmed.split('=').collect();
                     if parts.len() == 2 {
                         let path_val = parts[1].trim_matches('"');
-                        let replaced = path_val
-                            .replace("$HOME", &home)
-                            .replace("${HOME}", &home);
+                        let replaced = path_val.replace("$HOME", &home).replace("${HOME}", &home);
                         return PathBuf::from(replaced);
                     }
                 }
@@ -81,9 +78,8 @@ pub struct AutostartManager {
 
 impl AutostartManager {
     pub fn new() -> Result<Self, AppError> {
-        let home = env::var("HOME").map_err(|_| {
-            AppError::Platform("HOME environment variable not set".to_string())
-        })?;
+        let home = env::var("HOME")
+            .map_err(|_| AppError::Platform("HOME environment variable not set".to_string()))?;
         let autostart_dir = PathBuf::from(home).join(".config/autostart");
         Ok(Self { autostart_dir })
     }
@@ -197,7 +193,10 @@ where
                 }
             }
         }
-        Err(e) => Err(AppError::Platform(format!("Failed to bind to socket: {}", e))),
+        Err(e) => Err(AppError::Platform(format!(
+            "Failed to bind to socket: {}",
+            e
+        ))),
     }
 }
 
@@ -206,13 +205,11 @@ fn spawn_uds_listener(
     on_focus: std::sync::Arc<impl Fn() + Send + Sync + 'static>,
 ) {
     thread::spawn(move || {
-        for stream in listener.incoming() {
-            if let Ok(mut stream) = stream {
-                let mut buffer = [0; 5];
-                if let Ok(n) = stream.read(&mut buffer) {
-                    if &buffer[..n] == b"focus" {
-                        on_focus();
-                    }
+        for mut stream in listener.incoming().flatten() {
+            let mut buffer = [0; 5];
+            if let Ok(n) = stream.read(&mut buffer) {
+                if &buffer[..n] == b"focus" {
+                    on_focus();
                 }
             }
         }
