@@ -394,6 +394,8 @@ impl WebViewManager {
         )
         .title("WhatNull")
         .inner_size(1280.0, 800.0)
+        .visible(true)
+        .focused(true)
         .user_agent(user_agent)
         .data_directory(data_dir)
         .initialization_script(inject_script)
