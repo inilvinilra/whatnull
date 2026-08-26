@@ -16,10 +16,10 @@ impl WebViewManager {
     }
 
     /// Build the main WhatsApp Desktop window dynamically with:
-    /// - Initialization UserScript (Anti-Revoke, Device Spoofing, Floating Glassmorphic Pill)
-    /// - Chrome macOS User-Agent for Voice & Video Call feature activation
-    /// - NavigationPolicy egress security filter
-    /// - Profile data directory isolation
+    /// - Deep Prototype Trap for Anti-Revoke (Preserves deleted message text inside chat bubbles)
+    /// - WhatsApp Voice & Video Call Feature Activation (Spoofs macOS Chrome + WebRTC shims)
+    /// - WebRTC local IP leak protection & device memory spoofing
+    /// - Floating glassmorphic settings pill & modals
     pub fn create_whatsapp_webview(
         &self,
         app: &AppHandle,
@@ -42,7 +42,46 @@ impl WebViewManager {
             if (window.__WHATNULL_INITIALIZED__) return;
             window.__WHATNULL_INITIALIZED__ = true;
 
-            // 1. DEVICE & USER-AGENT SPOOFING (Activates WhatsApp Voice & Video Call Buttons)
+            // --- 1. PROTOTYPE TRAP: DEEP ANTI-REVOKE (PRESERVES DELETED MESSAGES INSIDE BUBBLES) ---
+            try {
+                const msgCache = new Map();
+
+                // Intercept isRevoked property on Msg models
+                Object.defineProperty(Object.prototype, 'isRevoked', {
+                    get: function() {
+                        return false; // Force WhatsApp React UI to render the original message bubble
+                    },
+                    set: function(val) {
+                        if (val && !this.__whatnull_preserved) {
+                            this.__whatnull_preserved = true;
+                            const text = this.body || this.caption || this.matchedText || msgCache.get(this.id?._serialized) || '';
+                            if (text) {
+                                this.body = '🛡️ [Preserved by WhatNull]\n' + text;
+                                if (this.caption) this.caption = '🛡️ [Preserved by WhatNull]\n' + this.caption;
+                            }
+                        }
+                    },
+                    configurable: true,
+                    enumerable: true
+                });
+
+                // Cache all message texts as they arrive
+                Object.defineProperty(Object.prototype, 'body', {
+                    get: function() {
+                        return this.__whatnull_body;
+                    },
+                    set: function(val) {
+                        this.__whatnull_body = val;
+                        if (this.id && this.id._serialized && val && !val.startsWith('🛡️')) {
+                            msgCache.set(this.id._serialized, val);
+                        }
+                    },
+                    configurable: true,
+                    enumerable: true
+                });
+            } catch(e) {}
+
+            // --- 2. DEVICE & CALLING SPOOFING (Enables 📹 Video & 📞 Voice Call Buttons) ---
             try {
                 const fakeUA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
                 Object.defineProperty(navigator, 'userAgent', { get: () => fakeUA, configurable: true });
@@ -51,9 +90,17 @@ impl WebViewManager {
                 Object.defineProperty(navigator, 'vendor', { get: () => 'Google Inc.', configurable: true });
                 Object.defineProperty(navigator, 'deviceMemory', { get: () => 8, configurable: true });
                 Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8, configurable: true });
+
+                // Ensure MediaDevices permissions for WebRTC calling
+                if (navigator.mediaDevices) {
+                    const origGetUserMedia = navigator.mediaDevices.getUserMedia;
+                    navigator.mediaDevices.getUserMedia = function(constraints) {
+                        return origGetUserMedia ? origGetUserMedia.call(navigator.mediaDevices, constraints) : Promise.reject(new Error('No Media'));
+                    };
+                }
             } catch(e) {}
 
-            // 2. WEBRTC LOCAL IP & MAC LEAK PREVENTION
+            // --- 3. WEBRTC LOCAL IP & MAC LEAK PREVENTION ---
             try {
                 const origCreateOffer = window.RTCPeerConnection && window.RTCPeerConnection.prototype.createOffer;
                 if (origCreateOffer) {
@@ -73,7 +120,7 @@ impl WebViewManager {
                 }
             } catch(e) {}
 
-            // 3. ANTI-REVOKE / ANTI-DELETE MESSAGE OBSERVER
+            // --- 4. DOM RECOVERY OBSERVER FOR DELETED MESSAGES ---
             function checkAndPreserveDeletedMessages() {
                 const spans = document.getElementsByTagName('span');
                 for (let i = 0; i < spans.length; i++) {
@@ -87,14 +134,14 @@ impl WebViewManager {
                         const row = span.closest('div[role="row"]');
                         if (row) {
                             row.style.borderLeft = '4px solid #ef4444';
-                            row.style.backgroundColor = 'rgba(239, 68, 68, 0.08)';
+                            row.style.backgroundColor = 'rgba(239, 68, 68, 0.12)';
                         }
                     }
                 }
             }
-            setInterval(checkAndPreserveDeletedMessages, 1500);
+            setInterval(checkAndPreserveDeletedMessages, 1000);
 
-            // 4. FLOATING UI SIDEBAR & SETTINGS MODAL
+            // --- 5. FLOATING UI SIDEBAR & SETTINGS MODAL ---
             function initUI() {
                 if (document.getElementById('whatnull-sidebar-pill')) return;
 
