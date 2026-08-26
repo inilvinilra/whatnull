@@ -80,6 +80,10 @@ fn main() {
             crate::ipc::reload_whatsapp,
             crate::ipc::hard_reload_whatsapp,
             crate::ipc::reset_session,
+            crate::ipc::list_profiles,
+            crate::ipc::create_profile,
+            crate::ipc::switch_profile,
+            crate::ipc::delete_profile,
             crate::notification::dispatch_notification,
         ])
         .setup(move |app| {
@@ -91,8 +95,9 @@ fn main() {
 
             let _ = crate::tray::init_tray(app);
 
-            let profile_data_dir = storage_manager.get_profile_data_dir(profile_id);
-            let _ = storage_manager.ensure_dirs(profile_id);
+            let active_pid = config_manager.read().unwrap().get().accounts.active_profile_id.clone();
+            let profile_data_dir = storage_manager.get_profile_data_dir(&active_pid);
+            let _ = storage_manager.ensure_dirs(&active_pid);
             let _ = webview_manager.create_whatsapp_webview(app.handle(), profile_data_dir);
 
             let state_file = state_dir.join("window_bounds.json");
@@ -101,7 +106,6 @@ fn main() {
             if config.general.remember_window_position && state_file.exists() {
                 if let Ok(content) = fs::read_to_string(&state_file) {
                     if let Ok(bounds) = serde_json::from_str::<WindowBounds>(&content) {
-                        let factor = main_window.scale_factor().unwrap_or(1.0);
                         let _ = main_window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(
                             bounds.width,
                             bounds.height,
@@ -121,6 +125,14 @@ fn main() {
             let config_manager_clone = config_manager.clone();
 
             main_window.on_window_event(move |event| match event {
+                tauri::WindowEvent::Focused(focused) => {
+                    let cfg = config_manager_clone.read().unwrap().get().clone();
+                    if !focused && cfg.privacy.blur_on_unfocus {
+                        let _ = main_window_clone.emit("privacy_blur", true);
+                    } else if focused {
+                        let _ = main_window_clone.emit("privacy_blur", false);
+                    }
+                }
                 tauri::WindowEvent::CloseRequested { api, .. } => {
                     let cfg = config_manager_clone.read().unwrap().get().clone();
                     match cfg.general.close_behavior {

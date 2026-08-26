@@ -61,6 +61,7 @@ pub struct AccountProfile {
     pub id: String,
     pub display_name: String,
     pub storage_partition: String,
+    pub avatar_color: String,
     pub created_at: u64,
     pub last_used_at: u64,
 }
@@ -75,8 +76,8 @@ pub enum CloseBehavior {
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 pub enum Theme {
     System,
-    Light,
     Dark,
+    Light,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -93,4 +94,10 @@ pub struct NotificationPayload {
     pub body: String,
     pub icon: Option<String>,
     pub tag: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+pub struct PrivacyState {
+    pub is_blurred: bool,
+    pub is_locked: bool,
 }

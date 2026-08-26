@@ -63,6 +63,22 @@ impl WebViewManager {
         Ok(window)
     }
 
+    pub fn switch_account_webview(
+        &self,
+        app: &AppHandle,
+        data_dir: PathBuf,
+    ) -> Result<WebviewWindow, AppError> {
+        if let Ok(mut guard) = self.remote_window.lock() {
+            if let Some(existing) = guard.take() {
+                let _ = existing.close();
+            }
+        } else if let Some(existing) = app.get_webview_window("whatsapp_remote") {
+            let _ = existing.close();
+        }
+
+        self.create_whatsapp_webview(app, data_dir)
+    }
+
     pub fn reload(&self) -> Result<(), AppError> {
         if let Ok(guard) = self.remote_window.lock() {
             if let Some(ref window) = *guard {

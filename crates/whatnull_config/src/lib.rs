@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
-use whatnull_types::{AppError, CloseBehavior, Theme, NotificationPrivacy};
+use whatnull_types::{AccountProfile, AppError, CloseBehavior, NotificationPrivacy, Theme};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct AppConfig {
@@ -62,9 +62,26 @@ pub struct StartupConfig {
     pub autostart: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct AccountsConfig {
     pub active_profile_id: String,
+    pub profiles: Vec<AccountProfile>,
+}
+
+impl Default for AccountsConfig {
+    fn default() -> Self {
+        Self {
+            active_profile_id: "default".to_string(),
+            profiles: vec![AccountProfile {
+                id: "default".to_string(),
+                display_name: "Primary Account".to_string(),
+                storage_partition: "default".to_string(),
+                avatar_color: "#10b981".to_string(),
+                created_at: 0,
+                last_used_at: 0,
+            }],
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -110,9 +127,7 @@ impl Default for AppConfig {
             startup: StartupConfig {
                 autostart: false,
             },
-            accounts: AccountsConfig {
-                active_profile_id: "default".to_string(),
-            },
+            accounts: AccountsConfig::default(),
             advanced: AdvancedConfig {
                 hardware_acceleration: true,
                 enable_dev_tools: false,

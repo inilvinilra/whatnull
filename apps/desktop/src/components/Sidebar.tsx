@@ -1,74 +1,52 @@
+import React from 'react'
+import { Shield, Settings, Users, Lock } from 'lucide-react'
 
-import { useAppStore } from '../stores/appStore'
-import { MessageSquare, Users, Settings, Info, Shield, LogOut } from 'lucide-react'
-import { invoke } from '@tauri-apps/api/core'
+interface SidebarProps {
+  onOpenSettings: () => void
+  onOpenAccountSwitcher: () => void
+  onPrivacyLock: () => void
+}
 
-export const Sidebar: React.FC = () => {
-  const { activeTab, setActiveTab, privacyMode, setPrivacyMode } = useAppStore()
-
-  const handleQuit = async () => {
-    try {
-      await invoke('quit_app')
-    } catch (e) {
-      console.error(e)
-    }
-  }
-
+export const Sidebar: React.FC<SidebarProps> = ({
+  onOpenSettings,
+  onOpenAccountSwitcher,
+  onPrivacyLock,
+}) => {
   return (
-    <aside className="sidebar">
-      <div className="sidebar-header">
-        <Shield size={24} style={{ color: 'var(--accent-light)' }} />
-        <h1 className="sidebar-logo">WhatNull</h1>
+    <div className="app-sidebar">
+      <div className="sidebar-logo">
+        <div className="sidebar-logo-icon">
+          <Shield size={18} />
+        </div>
       </div>
 
-      <nav className="sidebar-menu">
+      <div style={{ flex: 1 }} />
+
+      <div className="sidebar-actions">
         <button
-          className={`menu-item ${activeTab === 'chats' ? 'active' : ''}`}
-          onClick={() => setActiveTab('chats')}
+          className="sidebar-btn"
+          title="Privacy Lock (Ctrl+L)"
+          onClick={onPrivacyLock}
         >
-          <MessageSquare size={18} />
-          <span>WhatsApp</span>
+          <Lock size={18} />
         </button>
 
         <button
-          className={`menu-item ${activeTab === 'accounts' ? 'active' : ''}`}
-          onClick={() => setActiveTab('accounts')}
+          className="sidebar-btn"
+          title="Switch Account Profile"
+          onClick={onOpenAccountSwitcher}
         >
           <Users size={18} />
-          <span>Accounts</span>
         </button>
 
         <button
-          className={`menu-item ${activeTab === 'settings' ? 'active' : ''}`}
-          onClick={() => setActiveTab('settings')}
+          className="sidebar-btn"
+          title="Settings"
+          onClick={onOpenSettings}
         >
           <Settings size={18} />
-          <span>Settings</span>
-        </button>
-
-        <button
-          className={`menu-item ${activeTab === 'about' ? 'active' : ''}`}
-          onClick={() => setActiveTab('about')}
-        >
-          <Info size={18} />
-          <span>About</span>
-        </button>
-      </nav>
-
-      <div className="sidebar-footer">
-        <button
-          className={`menu-item ${privacyMode ? 'active' : ''}`}
-          onClick={() => setPrivacyMode(!privacyMode)}
-          style={{ width: 'auto', flex: 1 }}
-        >
-          <Shield size={18} />
-          <span>{privacyMode ? 'Protected' : 'Privacy Mode'}</span>
-        </button>
-
-        <button className="menu-item" onClick={handleQuit} style={{ padding: '12px' }}>
-          <LogOut size={18} />
         </button>
       </div>
-    </aside>
+    </div>
   )
 }
