@@ -682,43 +682,58 @@ fn whatsapp_init_script() -> &'static str {
     const invoke = window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke;
     if (!invoke) return null;
 
-    const sanitizable = files.filter(isNativeSanitizable);
-    if (!sanitizable.length) return null;
+    const entries = [];
+    files.forEach((file, position) => {
+      if (isNativeSanitizable(file)) entries.push({ file, position });
+    });
+    if (!entries.length) return null;
 
-    const payload = await Promise.all(sanitizable.map(async (file) => ({
-      name: file.name,
-      mimeType: file.type,
-      dataBase64: arrayBufferToBase64(await file.arrayBuffer())
+    const payload = await Promise.all(entries.map(async (entry) => ({
+      name: entry.file.name,
+      mimeType: entry.file.type,
+      dataBase64: arrayBufferToBase64(await entry.file.arrayBuffer())
     })));
 
     const results = await invoke('sanitize_upload_files', { files: payload });
-    const byName = new Map(results.map((item) => [item.name, item]));
+    const byIndex = new Map(results.map((item) => [item.index, item]));
+
+    const replacements = new Map();
+    const failures = [];
     let changed = false;
 
-    const sanitizedFiles = files.map((file) => {
-      const result = byName.get(file.name);
-      if (!result) return file;
-      const blob = base64ToBlob(result.dataBase64, result.mimeType || file.type);
-      changed = changed || result.changed || blob.size !== file.size;
-      return new File([blob], file.name, {
-        type: result.mimeType || file.type,
+    entries.forEach((entry, index) => {
+      const result = byIndex.get(index);
+      if (!result) return;
+      if (!result.dataBase64) {
+        failures.push({ name: entry.file.name, error: result.error || 'unknown' });
+        return;
+      }
+      const type = result.mimeType || entry.file.type;
+      const blob = base64ToBlob(result.dataBase64, type);
+      changed = changed || result.changed || blob.size !== entry.file.size;
+      replacements.set(entry.position, new File([blob], entry.file.name, {
+        type,
         lastModified: Date.now()
-      });
+      }));
     });
+
+    const sanitizedFiles = files.map((file, position) => replacements.get(position) || file);
 
     window.__WHATNULL_STATUS__.nativeSanitizer = true;
     window.__WHATNULL_STATUS__.lastSanitize = {
       at: new Date().toISOString(),
+      sanitized: replacements.size,
+      failed: failures.length,
       files: results.map((item) => ({
-        name: item.name,
         changed: item.changed,
+        error: item.error,
         fieldsRemoved: item.fieldsRemoved,
         originalSize: item.originalSize,
         strippedSize: item.strippedSize
       }))
     };
 
-    return { files: sanitizedFiles, changed };
+    return { files: sanitizedFiles, changed, failures };
   }
 
   document.addEventListener('change', async (event) => {

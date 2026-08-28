@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::Cursor;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use lopdf::{Document, Object};
 
@@ -188,6 +188,18 @@ pub fn strip_metadata(path: &Path) -> Result<StripResult, MetadataError> {
     }
 }
 
+fn sibling_output_path(path: &Path) -> PathBuf {
+    let stem = path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("whatnull");
+    let name = match path.extension().and_then(|value| value.to_str()) {
+        Some(extension) => format!("{}.whatnull-stripped.{}", stem, extension),
+        None => format!("{}.whatnull-stripped", stem),
+    };
+    path.with_file_name(name)
+}
+
 pub fn strip_pdf_metadata(path: &Path) -> Result<StripResult, MetadataError> {
     let original_size = fs::metadata(path)?.len();
     let mut doc = Document::load(path)
@@ -260,7 +272,7 @@ pub fn strip_pdf_metadata(path: &Path) -> Result<StripResult, MetadataError> {
         }
     }
 
-    let output_path = path.with_extension("stripped.tmp");
+    let output_path = sibling_output_path(path);
     doc.compress();
     doc.save(&output_path)
         .map_err(|e| MetadataError::ImageProcessing(format!("Failed to write PDF: {}", e)))?;
@@ -278,7 +290,7 @@ pub fn strip_pdf_metadata(path: &Path) -> Result<StripResult, MetadataError> {
 
 pub fn strip_av_metadata(path: &Path) -> Result<StripResult, MetadataError> {
     let original_size = fs::metadata(path)?.len();
-    let output_path = path.with_extension("stripped.tmp");
+    let output_path = sibling_output_path(path);
 
     let status = std::process::Command::new("ffmpeg")
         .args([
@@ -516,5 +528,82 @@ mod tests {
             Err(MetadataError::UnsupportedFileType(_)) => {}
             _ => panic!("Expected UnsupportedFileType error"),
         }
+    }
+
+    fn ffmpeg_available() -> bool {
+        std::process::Command::new("ffmpeg")
+            .arg("-version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false)
+    }
+
+    #[test]
+    fn sibling_output_path_keeps_the_container_extension() {
+        assert_eq!(
+            sibling_output_path(Path::new("/tmp/clip.mp4")),
+            PathBuf::from("/tmp/clip.whatnull-stripped.mp4")
+        );
+        assert_eq!(
+            sibling_output_path(Path::new("/tmp/song.MP3")),
+            PathBuf::from("/tmp/song.whatnull-stripped.MP3")
+        );
+        assert_eq!(
+            sibling_output_path(Path::new("/tmp/noext")),
+            PathBuf::from("/tmp/noext.whatnull-stripped")
+        );
+    }
+
+    #[test]
+    fn strip_av_metadata_removes_container_tags() {
+        if !ffmpeg_available() {
+            return;
+        }
+
+        let dir = std::env::temp_dir().join("whatnull_test_av");
+        let _ = fs::create_dir_all(&dir);
+        let file = dir.join("tagged.mp3");
+        let _ = fs::remove_file(&file);
+
+        let marker = "WhatNullSecretTitle";
+        let created = std::process::Command::new("ffmpeg")
+            .args([
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:duration=1",
+                "-metadata",
+                &format!("title={}", marker),
+                "-metadata",
+                "artist=WhatNullSecretArtist",
+                "-y",
+                &file.to_string_lossy(),
+            ])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false);
+
+        if !created {
+            let _ = fs::remove_dir_all(&dir);
+            return;
+        }
+
+        let before = fs::read(&file).unwrap();
+        assert!(
+            String::from_utf8_lossy(&before).contains(marker),
+            "fixture should carry the tag"
+        );
+
+        let result = strip_av_metadata(&file).unwrap();
+        let after = fs::read(&file).unwrap();
+        let _ = fs::remove_dir_all(&dir);
+
+        assert!(!String::from_utf8_lossy(&after).contains(marker));
+        assert!(!result.fields_removed.is_empty());
+        assert!(!after.is_empty());
     }
 }

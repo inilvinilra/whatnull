@@ -4,6 +4,9 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 ### Fixed
+- Video and audio metadata stripping never worked. `ffmpeg` was told to write `<name>.stripped.tmp`, and it cannot infer an output container from `.tmp`, so every attempt failed with "Unable to choose an output format". The temporary file now keeps the original container extension, and a test creates a tagged MP3, strips it and asserts the tag is gone.
+- One unsupported or corrupt attachment no longer discards the whole batch. `sanitize_upload_files` reports per file, and a failure carries its reason instead of collapsing the request.
+- Attachments were matched to their sanitized bytes by file name, so selecting two files with the same name from different folders could swap their contents. Matching is by index now.
 - Voice and video calls could never work. wry leaves WebKitGTK's `enable-media-stream` and `enable-webrtc` off, which is their default, and connects no `permission-request` handler, and WebKit refuses every permission request when nobody is listening. `getUserMedia` was therefore denied before it reached a device. The remote webview now enables those settings and answers permission requests.
 - The dev server bound only to the IPv6 loopback. `vite.config.ts` asked for `localhost`, which resolves to `::1` first on many systems, so nothing listened on `127.0.0.1` while `devUrl` pointed at the name `localhost`. Whether the shell webview loaded then depended on how WebKit resolved that name, and when it chose IPv4 the app opened on a raw "Could not connect to localhost" page. Both sides now use `127.0.0.1` explicitly.
 - The window no longer shows a strip of the local shell above the WhatsApp surface. Both webviews now fill the window and visibility is switched explicitly, because GTK gives sibling webviews no usable stacking order.
