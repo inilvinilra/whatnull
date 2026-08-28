@@ -30,3 +30,6 @@ local_test_config.json
 .env
 .env.*
 !.env.example
+
+# Raw branding source; the committed master is apps/desktop/src-tauri/icons/icon.png
+logo.jpeg
