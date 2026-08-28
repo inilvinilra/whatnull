@@ -27,6 +27,7 @@ The WhatNull navbar is injected into the WhatsApp page inside a closed shadow ro
 - Navigation filtering keeps WhatsApp-owned surfaces inside the app and routes everything else to the system browser.
 - The remote webview is hidden while local modals or the privacy overlay are visible, which avoids native webview stacking problems while keeping a single window.
 - Both webviews are resized together from one place, so a window resize, a scale-factor change and a restored window position cannot leave one of them at stale bounds.
+- Voice and video calls require WebKitGTK's media settings, which are off by default and which wry does not set, plus a `permission-request` handler, without which WebKit refuses `getUserMedia` outright. WhatNull enables media stream, WebRTC, MediaSource and encrypted media on the remote webview and answers permission requests from the `permissions` section of the config. Camera and microphone default to allowed, screen sharing to refused, and every other permission class is refused outright.
 - WebRTC local candidate filtering is injected into the remote webview as defense in depth. MAC addresses are not exposed to web content by any browser API, so WhatNull does not attempt to modify or spoof them.
 - Deleted-message preservation is an optional, disabled-by-default local DOM feature backed by an in-memory cache.
 - Metadata stripping for JPEG, PNG, and PDF runs in the privacy crate. Video and audio stripping shells out to `ffmpeg`.

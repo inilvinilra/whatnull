@@ -1,10 +1,14 @@
+#[cfg(target_os = "linux")]
+mod webkit;
+
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use tauri::{
     webview::PageLoadEvent, AppHandle, LogicalPosition, LogicalSize, Manager, Rect, Url, Webview,
     WebviewBuilder, WebviewUrl, Window, WindowBuilder,
 };
+use whatnull_config::ConfigManager;
 use whatnull_security::{NavigationDecision, NavigationPolicy};
 use whatnull_types::AppError;
 
@@ -17,14 +21,16 @@ pub struct WebViewManager {
     shell_webview: Arc<Mutex<Option<Webview>>>,
     remote_webview: Arc<Mutex<Option<Webview>>>,
     overlay_visible: Arc<Mutex<bool>>,
+    config_manager: Arc<RwLock<ConfigManager>>,
 }
 
 impl WebViewManager {
-    pub fn new() -> Self {
+    pub fn new(config_manager: Arc<RwLock<ConfigManager>>) -> Self {
         Self {
             shell_webview: Arc::new(Mutex::new(None)),
             remote_webview: Arc::new(Mutex::new(None)),
             overlay_visible: Arc::new(Mutex::new(true)),
+            config_manager,
         }
     }
 
@@ -189,6 +195,18 @@ impl WebViewManager {
         let webview = window
             .add_child(builder, bounds.position, bounds.size)
             .map_err(|e| AppError::WebView(format!("Failed to build WhatsApp webview: {}", e)))?;
+
+        #[cfg(target_os = "linux")]
+        {
+            let config_manager = self.config_manager.clone();
+            webview
+                .with_webview(move |platform| {
+                    webkit::configure(&platform.inner(), config_manager);
+                })
+                .map_err(|e| {
+                    AppError::WebView(format!("Failed to configure WhatsApp webview: {}", e))
+                })?;
+        }
 
         if let Ok(mut guard) = self.remote_webview.lock() {
             *guard = Some(webview.clone());
@@ -451,21 +469,6 @@ fn whatsapp_init_script() -> &'static str {
     Object.defineProperty(navigator, 'vendor', { get: () => 'Google Inc.', configurable: true });
     Object.defineProperty(navigator, 'deviceMemory', { get: () => 8, configurable: true });
     Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8, configurable: true });
-  } catch (_) {}
-
-  try {
-    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-      const enumerateDevices = navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);
-      navigator.mediaDevices.enumerateDevices = async function () {
-        const devices = await enumerateDevices().catch(() => []);
-        if (devices.length) return devices;
-        return [
-          { deviceId: 'default', kind: 'audioinput', label: 'Default Microphone', groupId: 'default' },
-          { deviceId: 'default', kind: 'videoinput', label: 'Default Camera', groupId: 'default' },
-          { deviceId: 'default', kind: 'audiooutput', label: 'Default Speaker', groupId: 'default' }
-        ];
-      };
-    }
   } catch (_) {}
 
   function scrubLocalCandidates(value) {

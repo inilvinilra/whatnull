@@ -35,6 +35,16 @@ Each account profile gets its own WebKit data and cache directory under the XDG 
 - **Internal schemes**: `blob:` and `about:` are allowed because WebKit uses them for WhatsApp's own media and PDF rendering.
 - **Everything else** is opened in the system browser rather than loaded in the app.
 
+## Device Permissions
+
+WebKitGTK denies every permission request when no handler is connected, which is why calls did not work at all. WhatNull now answers them explicitly:
+
+- **Microphone and camera**: granted when the matching `permissions` setting is on. Both default to on, because a WhatsApp client that cannot place a call is not doing its job. Both are switchable in Settings.
+- **Screen sharing**: refused unless explicitly enabled. WebKit reports display capture through the same request type as the camera, so the two are told apart with `webkit_user_media_permission_is_for_display_device` rather than sharing one switch.
+- **Everything else**: geolocation, notifications, pointer lock, device info, media key systems, missing-plugin installation and cross-site data access are refused without asking.
+
+The webview can only ever reach WhatsApp origins, since the navigation policy rejects anything else before it loads, so these grants are scoped by that policy rather than by an origin check in the handler.
+
 ## Known Gaps
 
 These are documented rather than claimed as done:

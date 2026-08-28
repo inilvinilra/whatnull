@@ -21,3 +21,6 @@ whatnull_storage = { path = "../../../crates/whatnull_storage" }
 whatnull_core = { path = "../../../crates/whatnull_core" }
 whatnull_notification = { path = "../../../crates/whatnull_notification" }
 whatnull_privacy = { path = "../../../crates/whatnull_privacy" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+webkit2gtk = { version = "=2.0.2", features = ["v2_38"] }

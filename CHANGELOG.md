@@ -4,6 +4,7 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 ### Fixed
+- Voice and video calls could never work. wry leaves WebKitGTK's `enable-media-stream` and `enable-webrtc` off, which is their default, and connects no `permission-request` handler, and WebKit refuses every permission request when nobody is listening. `getUserMedia` was therefore denied before it reached a device. The remote webview now enables those settings and answers permission requests.
 - The dev server bound only to the IPv6 loopback. `vite.config.ts` asked for `localhost`, which resolves to `::1` first on many systems, so nothing listened on `127.0.0.1` while `devUrl` pointed at the name `localhost`. Whether the shell webview loaded then depended on how WebKit resolved that name, and when it chose IPv4 the app opened on a raw "Could not connect to localhost" page. Both sides now use `127.0.0.1` explicitly.
 - The window no longer shows a strip of the local shell above the WhatsApp surface. Both webviews now fill the window and visibility is switched explicitly, because GTK gives sibling webviews no usable stacking order.
 - Startup failures print the reason to stderr instead of exiting silently with status 1.
@@ -11,6 +12,7 @@ All notable changes to this project are documented in this file.
 - The account switcher now surfaces command errors instead of writing them to the console, so refusals like "Cannot delete the active profile" are visible.
 
 ### Added
+- A `permissions` config section covering microphone, camera and screen sharing, surfaced in Settings. Microphone and camera default to on, screen sharing to off. Display capture is distinguished from camera capture rather than sharing a switch.
 - The WhatNull shield logo as the application and tray icon, at 32px, 128px, 128px@2x and 512px, plus the browser favicon. The source image carried a signed C2PA provenance manifest in an APP11 segment, which the project's own JPEG stripper removed before the icons were derived, and the baked-in checkerboard was replaced with a real alpha channel.
 - A WhatNull navbar injected into the WhatsApp page inside a closed shadow root, carrying the privacy lock, account profiles and settings actions.
 - `request_shell_action`, a closed three-value command letting that navbar ask the local shell to open its own interface.
@@ -19,6 +21,7 @@ All notable changes to this project are documented in this file.
 - Explicit Tauri app manifest listing every exposed command, so the generated ACL matches the invoke handler.
 
 ### Changed
+- The injected script no longer fabricates a fake device list when `enumerateDevices` returns nothing. That shim existed because media support was off; with it on, inventing devices would only mislead the page.
 - The window title is WhatNull rather than the Vite template's "desktop", and the unused template assets are gone.
 - `set_whatsapp_visible` and `set_shell_overlay_mode` are replaced by a single `set_overlay_visible`. The frontend previously issued the two as separate calls that could interleave.
 - The permanent 60px shell sidebar is gone, along with the `Sidebar` component and the unused `App.css`.

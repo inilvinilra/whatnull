@@ -70,7 +70,8 @@ fn main() {
     let state_dir = core.paths.state_dir.clone();
     let config_manager = core.config_manager.clone();
     let storage_manager = core.storage_manager.clone();
-    let webview_manager = std::sync::Arc::new(crate::webview::WebViewManager::new());
+    let webview_manager =
+        std::sync::Arc::new(crate::webview::WebViewManager::new(config_manager.clone()));
 
     tauri::Builder::default()
         .manage(crate::app::AppState {

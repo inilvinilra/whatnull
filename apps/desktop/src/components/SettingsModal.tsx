@@ -228,10 +228,59 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                 </label>
               </div>
 
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingTop: '16px', borderTop: '1px solid var(--glass-border)' }}>
+                <h4 className="form-label">Calls and Devices</h4>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: 1.5 }}>
+                  WhatsApp Web asks for these when you place or answer a call. Requests from any other source are refused.
+                </p>
+
+                <label className="form-checkbox-group">
+                  <input
+                    type="checkbox"
+                    className="form-checkbox"
+                    checked={config.permissions.microphone}
+                    onChange={(e) =>
+                      updateConfig((cfg) => {
+                        cfg.permissions.microphone = e.target.checked
+                      })
+                    }
+                  />
+                  <span className="form-label">Allow microphone for voice calls</span>
+                </label>
+
+                <label className="form-checkbox-group">
+                  <input
+                    type="checkbox"
+                    className="form-checkbox"
+                    checked={config.permissions.camera}
+                    onChange={(e) =>
+                      updateConfig((cfg) => {
+                        cfg.permissions.camera = e.target.checked
+                      })
+                    }
+                  />
+                  <span className="form-label">Allow camera for video calls</span>
+                </label>
+
+                <label className="form-checkbox-group">
+                  <input
+                    type="checkbox"
+                    className="form-checkbox"
+                    checked={config.permissions.screen_share}
+                    onChange={(e) =>
+                      updateConfig((cfg) => {
+                        cfg.permissions.screen_share = e.target.checked
+                      })
+                    }
+                  />
+                  <span className="form-label">Allow screen sharing</span>
+                </label>
+              </div>
+
               <div style={{ padding: '16px', background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <h4 style={{ color: '#ef4444', fontWeight: 600, fontSize: '14px' }}>Privacy Notice</h4>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: 1.5 }}>
-                  WhatNull disables all telemetry, usage reporting, and messaging analysis by default. These settings are hardcoded to off to guarantee your privacy.
+                  WhatNull collects no telemetry, no usage statistics and no crash reports, and talks to no server of its own.
                 </p>
               </div>
             </div>

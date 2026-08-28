@@ -51,6 +51,11 @@ export interface AppConfig {
     hardware_acceleration: boolean
     enable_dev_tools: boolean
   }
+  permissions: {
+    microphone: boolean
+    camera: boolean
+    screen_share: boolean
+  }
 }
 
 interface ConfigState {

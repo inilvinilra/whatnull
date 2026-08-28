@@ -17,7 +17,7 @@ WhatNull is at `0.1.0` and is **pre-release**. The table below reflects what is 
 | Image and PDF metadata stripping on upload | Working, see limitations |
 | Video and audio metadata stripping | Requires `ffmpeg`, currently unreliable |
 | Native desktop notifications | Not implemented |
-| Voice and video calls | Not implemented |
+| Voice and video calls | Working, camera and microphone on by default |
 | Deleted-message preservation | Experimental, opt-in, disabled by default |
 | Local logging | Not implemented |
 

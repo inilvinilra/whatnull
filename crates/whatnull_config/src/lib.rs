@@ -25,6 +25,25 @@ pub struct AppConfig {
     pub startup: StartupConfig,
     pub accounts: AccountsConfig,
     pub advanced: AdvancedConfig,
+    #[serde(default)]
+    pub permissions: PermissionsConfig,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+pub struct PermissionsConfig {
+    pub microphone: bool,
+    pub camera: bool,
+    pub screen_share: bool,
+}
+
+impl Default for PermissionsConfig {
+    fn default() -> Self {
+        Self {
+            microphone: true,
+            camera: true,
+            screen_share: false,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -140,6 +159,7 @@ impl Default for AppConfig {
                 hardware_acceleration: true,
                 enable_dev_tools: false,
             },
+            permissions: PermissionsConfig::default(),
         }
     }
 }
@@ -475,5 +495,23 @@ mod tests {
         assert_eq!(reloaded.get().accounts.active_profile_id, "default");
 
         let _ = fs::remove_file(&config_path);
+    }
+
+    #[test]
+    fn permissions_default_to_calls_on_and_screen_share_off() {
+        let permissions = AppConfig::default().permissions;
+        assert!(permissions.microphone);
+        assert!(permissions.camera);
+        assert!(!permissions.screen_share);
+    }
+
+    #[test]
+    fn a_config_written_before_permissions_existed_still_loads() {
+        let mut value = serde_json::to_value(AppConfig::default()).unwrap();
+        value.as_object_mut().unwrap().remove("permissions");
+
+        let restored: AppConfig = serde_json::from_value(value).unwrap();
+        assert_eq!(restored.permissions, PermissionsConfig::default());
+        assert!(restored.validate().is_ok());
     }
 }
